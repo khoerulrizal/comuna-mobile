@@ -1,12 +1,12 @@
 {
   "expo": {
-    "name": "mobile-app",
-    "slug": "mobile-app",
+    "name": "Comuna",
+    "slug": "comuna-mobile",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "mobileapp",
-    "userInterfaceStyle": "automatic",
+    "scheme": "comuna",
+    "userInterfaceStyle": "light",
     "ios": {
       "icon": "./assets/expo.icon"
     },
@@ -28,7 +28,7 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#208AEF",
+          "backgroundColor": "#6B5BFF",
           "android": {
             "image": "./assets/images/splash-icon.png",
             "imageWidth": 76
