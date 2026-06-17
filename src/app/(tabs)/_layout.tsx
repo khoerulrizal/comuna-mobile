@@ -11,7 +11,7 @@ type TabBarProps = Parameters<
 >[0];
 
 const TAB_META: Record<string, { label: string; icon: IconName }> = {
-  index: { label: "Home", icon: "home" },
+  home: { label: "Home", icon: "home" },
   aktivitas: { label: "Aktivitas", icon: "chart" },
   profil: { label: "Profil", icon: "user" },
 };
@@ -70,7 +70,7 @@ export default function TabsLayout() {
       screenOptions={{ headerShown: false }}
       tabBar={(props) => <TabBar {...props} />}
     >
-      <Tabs.Screen name="index" />
+      <Tabs.Screen name="home" />
       <Tabs.Screen name="aktivitas" />
       <Tabs.Screen name="profil" />
     </Tabs>
