@@ -321,8 +321,8 @@ function LocationStep({
           hitSlop={8}
           style={{
             position: "absolute",
-            right: 12,
-            top: 60,
+            right: 9,
+            top: 82,
             width: 44,
             height: 44,
             borderRadius: 22,
