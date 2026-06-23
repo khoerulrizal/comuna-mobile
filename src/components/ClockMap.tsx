@@ -110,7 +110,7 @@ export const ClockMap = forwardRef<
         circles={circles}
         uiSettings={
           Platform.OS === "ios"
-            ? { myLocationButtonEnabled: false, compassEnabled: false, scaleBarEnabled: false }
+            ? { myLocationButtonEnabled: false, compassEnabled: false, scaleBarEnabled: false, togglePitchEnabled: false }
             : {
                 myLocationButtonEnabled: false,
                 compassEnabled: false,

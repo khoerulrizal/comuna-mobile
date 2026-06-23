@@ -315,14 +315,14 @@ function LocationStep({
           <StatusBanner tone={banner.tone} text={banner.text} busy={busy} />
         </View>
 
-        {/* Tombol re-center / refresh lokasi (kanan atas, di bawah tombol "3D" native) */}
+        {/* Tombol re-center / refresh lokasi (kanan atas — menggantikan tombol "3D" native) */}
         <Pressable
           onPress={recenter}
           hitSlop={8}
           style={{
             position: "absolute",
-            right: 9,
-            top: 82,
+            right: 12,
+            top: 14,
             width: 44,
             height: 44,
             borderRadius: 22,
