@@ -27,3 +27,7 @@ export const API_BASE_URL = resolved.replace(/\/+$/, "");
 
 /** Label device untuk audit/registrasi refresh token di server. */
 export const DEVICE_NAME = [Platform.OS, Device.modelName].filter(Boolean).join(" ") || "mobile";
+
+// Peta (expo-maps) butuh DEV BUILD + (Android) Google Maps API key. Default OFF →
+// fallback tampilan koordinat sampai siap. Aktifkan: EXPO_PUBLIC_MAPS_ENABLED=1.
+export const MAPS_ENABLED = process.env.EXPO_PUBLIC_MAPS_ENABLED?.trim() === "1";

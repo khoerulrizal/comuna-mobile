@@ -1,15 +1,110 @@
 // Home (karyawan) — ported from the design's screens-home.jsx (Corelia HRIS Mobile).
-import React from "react";
-import { ScrollView, View } from "react-native";
+import React, { useCallback, useEffect, useState } from "react";
+import { Image, Modal, Pressable, ScrollView, View } from "react-native";
+import { router, useFocusEffect } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import Svg, { Circle, Text as SvgText } from "react-native-svg";
 import { Avatar, Card, Icon, type IconName, Pill, SectionHeader, Txt } from "@/components/ui";
-import { colors, fonts } from "@/theme/tokens";
+import { colors, fonts, radii, shadows } from "@/theme/tokens";
 import { me, review } from "@/data/mock";
+import { AuthError } from "@/lib/api";
+import {
+  clockLocationSummary,
+  dateLabel,
+  formatDuration,
+  getHome,
+  liveClock,
+  timeHMS,
+  type Home,
+} from "@/lib/home";
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
+  const [home, setHome] = useState<Home | null>(null);
+  const [offModal, setOffModal] = useState(false);
+  const [nowMs, setNowMs] = useState(() => Date.now());
+
+  // Jam berjalan: tick tiap detik untuk clock live di card.
+  useEffect(() => {
+    const t = setInterval(() => setNowMs(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+      (async () => {
+        try {
+          const h = await getHome();
+          if (active) setHome(h);
+        } catch (e) {
+          if (e instanceof AuthError) router.replace("/login");
+          // selain itu: biarkan tampilan fallback (mock) — Home tetap berguna.
+        }
+      })();
+      return () => {
+        active = false;
+      };
+    }, []),
+  );
+
+  const loaded = home != null;
+  const profile = home?.profile;
+  const shift = home?.shift ?? null;
+  const greeting = profile?.greeting ?? "Halo";
+  const photoUrl = profile?.photoUrl ?? null;
+  const fullName = profile?.fullName ?? me.name;
+
+  // Sudah dimuat tapi tak ada penugasan shift → belum ada jadwal (kantor disembunyikan).
+  const noSchedule = loaded && !shift;
+
+  // Baris shift: "Nama · WFO · 09:00–18:00 WIB" (jam = hari current + zona).
+  const shiftLabel = shift
+    ? `${shift.name}${shift.locationType !== "MULTIPLE" ? ` · ${shift.locationType}` : ""}${
+        shift.isWorkingDay && shift.startTime && shift.endTime
+          ? ` · ${shift.startTime}–${shift.endTime}${shift.tzAbbr ? ` ${shift.tzAbbr}` : ""}`
+          : shift.holidayName
+            ? ` · Libur: ${shift.holidayName}`
+            : " · Libur hari ini"
+      }`
+    : noSchedule
+      ? "Belum ada jadwal kerja"
+      : `Shift · ${me.shift}`;
+
+  // Lokasi clock: tampil hanya jika ada shift (atau fallback mock saat belum dimuat).
+  const showLocation = !noSchedule;
+  const loc = shift ? clockLocationSummary(shift) : { text: me.location, extra: 0 };
+
+  // ── Card clock-in/out (data hari ini, zona shift) ──────────────────────────
+  const today = home?.today ?? null;
+  const tzOff = today?.tzOffsetMinutes ?? 0;
+  const tzAbbr = today?.tzAbbr ?? "";
+  const liveTime = today ? liveClock(nowMs, tzOff) : "--:--:--";
+  const todayLabel = today ? dateLabel(nowMs, tzOff) : "Hari ini";
+  const clockInHMS = today ? timeHMS(today.clockIn, tzOff) : null;
+  const clockOutHMS = today ? timeHMS(today.clockOut, tzOff) : null;
+  const attStatus = today?.attendanceStatus ?? "BEFORE_CLOCKIN";
+
+  // Jam kerja: "Belum clock out" selagi sudah clock-in tapi belum clock-out.
+  const jamKerja =
+    today?.workedMinutes != null
+      ? (formatDuration(today.workedMinutes) ?? "–")
+      : attStatus === "CLOCKED_IN"
+        ? "Belum clock out"
+        : "–";
+  const targetLabel = formatDuration(today?.targetMinutes ?? null) ?? "–";
+  const selesaiLabel = clockOutHMS ?? "–";
+
+  // Tombol: primary (belum clock-in) / merah (sudah clock-in, belum out) / disabled (selesai).
+  const clockDone = attStatus === "DONE";
+  const clockedIn = attStatus === "CLOCKED_IN";
+
+  function onClockPress() {
+    if (clockDone) return;
+    router.push("/clock");
+  }
+
   return (
     <View style={{ flex: 1, backgroundColor: colors.neutral[25] }}>
       <ScrollView
@@ -31,13 +126,19 @@ export default function HomeScreen() {
         >
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-              <Avatar name={me.name} size={42} />
+              <Pressable onPress={() => router.push("/profil")} hitSlop={6}>
+                {photoUrl ? (
+                  <Image source={{ uri: photoUrl }} style={{ width: 42, height: 42, borderRadius: 21 }} />
+                ) : (
+                  <Avatar name={fullName} size={42} />
+                )}
+              </Pressable>
               <View>
                 <Txt size={12.5} color="rgba(255,255,255,0.85)" weight="medium">
-                  Selamat pagi,
+                  {greeting},
                 </Txt>
                 <Txt size={17} weight="extrabold" color="#fff">
-                  {me.firstName} 👋
+                  {fullName}
                 </Txt>
               </View>
             </View>
@@ -72,53 +173,116 @@ export default function HomeScreen() {
           <View style={{ marginTop: 18, flexDirection: "row", alignItems: "center", gap: 8 }}>
             <Icon name="clock" size={14} color="rgba(255,255,255,0.85)" strokeWidth={2} />
             <Txt size={12.5} color="rgba(255,255,255,0.9)">
-              Shift · {me.shift}
+              {shiftLabel}
             </Txt>
           </View>
+          {showLocation ? (
           <View style={{ marginTop: 6, flexDirection: "row", alignItems: "center", gap: 8 }}>
             <Icon name="mapPin" size={14} color="rgba(255,255,255,0.85)" strokeWidth={2} />
             <Txt size={12.5} color="rgba(255,255,255,0.9)">
-              {me.location}
+              {loc.text}
             </Txt>
+            {loc.extra > 0 ? (
+              <Pressable
+                onPress={() => setOffModal(true)}
+                hitSlop={8}
+                style={{
+                  paddingHorizontal: 7,
+                  paddingVertical: 1,
+                  borderRadius: 999,
+                  backgroundColor: "rgba(255,255,255,0.25)",
+                }}
+              >
+                <Txt size={11} weight="bold" color="#fff">
+                  +{loc.extra}
+                </Txt>
+              </Pressable>
+            ) : null}
           </View>
+          ) : null}
         </LinearGradient>
 
         {/* Clock-in card — floating */}
         <View style={{ paddingHorizontal: 16, marginTop: -50 }}>
           <Card pad={18} radius={22} elevated>
             <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-              <View>
-                <Txt size={12} weight="semibold" color={colors.neutral[500]} style={{ letterSpacing: 0.3 }}>
-                  HARI INI
+              <View style={{ flex: 1 }}>
+                <Txt size={12} weight="semibold" color={colors.neutral[500]} style={{ letterSpacing: 0.2 }}>
+                  {todayLabel}
                 </Txt>
                 <View style={{ flexDirection: "row", alignItems: "baseline", gap: 4, marginTop: 2 }}>
-                  <Txt size={22} weight="extrabold" color={colors.neutral[900]}>
-                    09:02
+                  <Txt size={26} weight="extrabold" color={colors.neutral[900]} style={{ fontVariant: ["tabular-nums"] }}>
+                    {liveTime}
                   </Txt>
-                  <Txt size={13} weight="semibold" color={colors.neutral[500]}>
-                    WIB
-                  </Txt>
+                  {tzAbbr ? (
+                    <Txt size={13} weight="semibold" color={colors.neutral[500]}>
+                      {tzAbbr}
+                    </Txt>
+                  ) : null}
                 </View>
                 <View style={{ marginTop: 6, flexDirection: "row", alignItems: "center", gap: 6 }}>
-                  <Pill tone="mint">
-                    <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.mint[500] }} />
-                    <Txt weight="semibold" size={11.5} color={colors.mint[700]}>
-                      Sudah clock in
-                    </Txt>
-                  </Pill>
-                  <Txt size={11.5} color={colors.neutral[500]}>
-                    · 09:02
-                  </Txt>
+                  {attStatus === "DONE" ? (
+                    <>
+                      <Pill tone="neutral">
+                        <Icon name="check" size={11} color={colors.neutral[600]} strokeWidth={2.5} />
+                        <Txt weight="semibold" size={11.5} color={colors.neutral[700]}>
+                          Kehadiran selesai
+                        </Txt>
+                      </Pill>
+                      {clockInHMS ? (
+                        <Txt size={11.5} color={colors.neutral[500]}>
+                          · {clockInHMS}
+                        </Txt>
+                      ) : null}
+                    </>
+                  ) : attStatus === "CLOCKED_IN" ? (
+                    <>
+                      <Pill tone="mint">
+                        <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.mint[500] }} />
+                        <Txt weight="semibold" size={11.5} color={colors.mint[700]}>
+                          Sudah clock in
+                        </Txt>
+                      </Pill>
+                      {clockInHMS ? (
+                        <Txt size={11.5} color={colors.neutral[500]}>
+                          · {clockInHMS}
+                        </Txt>
+                      ) : null}
+                    </>
+                  ) : (
+                    <Pill tone="amber">
+                      <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.amber[500] }} />
+                      <Txt weight="semibold" size={11.5} color={colors.amber[700]}>
+                        Belum clock in
+                      </Txt>
+                    </Pill>
+                  )}
                 </View>
               </View>
-              <LinearGradient
-                colors={[colors.brand[500], colors.brand[700]]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={{ width: 70, height: 70, borderRadius: 22, alignItems: "center", justifyContent: "center" }}
-              >
-                <Icon name="fingerprint" size={32} color="#fff" strokeWidth={2} />
-              </LinearGradient>
+              <Pressable onPress={onClockPress} disabled={clockDone}>
+                <LinearGradient
+                  colors={
+                    clockDone
+                      ? [colors.neutral[200], colors.neutral[300]]
+                      : clockedIn
+                        ? [colors.rose[500], colors.rose[700]]
+                        : [colors.brand[500], colors.brand[700]]
+                  }
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={{ width: 70, height: 70, borderRadius: 22, alignItems: "center", justifyContent: "center" }}
+                >
+                  <Icon
+                    name={clockDone ? "check" : "fingerprint"}
+                    size={clockDone ? 30 : 32}
+                    color="#fff"
+                    strokeWidth={2}
+                  />
+                  <Txt size={9.5} weight="bold" color="#fff" style={{ marginTop: 2 }}>
+                    {clockDone ? "Selesai" : clockedIn ? "Clock Out" : "Clock In"}
+                  </Txt>
+                </LinearGradient>
+              </Pressable>
             </View>
             <View
               style={{
@@ -130,9 +294,9 @@ export default function HomeScreen() {
                 borderStyle: "dashed",
               }}
             >
-              <MiniStat label="Jam Kerja" value="6j 32m" color={colors.brand[600]} />
-              <MiniStat label="Target" value="9j" color={colors.neutral[600]} />
-              <MiniStat label="Selesai" value="18:00" color={colors.neutral[600]} />
+              <MiniStat label="Jam Kerja" value={jamKerja} color={colors.brand[600]} />
+              <MiniStat label="Target" value={targetLabel} color={colors.neutral[600]} />
+              <MiniStat label="Selesai" value={selesaiLabel} color={colors.neutral[600]} />
             </View>
           </Card>
         </View>
@@ -260,6 +424,68 @@ export default function HomeScreen() {
           </Card>
         </View>
       </ScrollView>
+
+      {/* Modal daftar kantor (lokasi clock WFO/MULTIPLE > 3 kantor) */}
+      <Modal transparent visible={offModal} animationType="fade" onRequestClose={() => setOffModal(false)} statusBarTranslucent>
+        <Pressable
+          onPress={() => setOffModal(false)}
+          style={{ flex: 1, backgroundColor: "rgba(16,13,26,0.55)", justifyContent: "flex-end" }}
+        >
+          <Pressable
+            onPress={(e) => e.stopPropagation()}
+            style={[
+              {
+                backgroundColor: "#fff",
+                borderTopLeftRadius: radii.xl,
+                borderTopRightRadius: radii.xl,
+                paddingHorizontal: 20,
+                paddingTop: 18,
+                paddingBottom: insets.bottom + 20,
+                maxHeight: "70%",
+              },
+              shadows.elevated,
+            ]}
+          >
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+              <Txt size={16} weight="extrabold" color={colors.neutral[900]}>
+                Lokasi Clock-in
+              </Txt>
+              <Pressable onPress={() => setOffModal(false)} hitSlop={8}>
+                <Icon name="close" size={20} color={colors.neutral[400]} strokeWidth={2} />
+              </Pressable>
+            </View>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {(shift?.offices ?? []).map((o, i) => (
+                <View
+                  key={o.id}
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 12,
+                    paddingVertical: 12,
+                    borderTopWidth: i === 0 ? 0 : 1,
+                    borderColor: colors.neutral[100],
+                  }}
+                >
+                  <View style={{ width: 36, height: 36, borderRadius: 11, backgroundColor: colors.brand[100], alignItems: "center", justifyContent: "center" }}>
+                    <Icon name="building" size={18} color={colors.brand[600]} strokeWidth={2} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Txt size={14} weight="bold" color={colors.neutral[800]}>
+                      {o.name}
+                    </Txt>
+                    {o.city ? (
+                      <Txt size={12} color={colors.neutral[400]} style={{ marginTop: 1 }}>
+                        {o.city}
+                      </Txt>
+                    ) : null}
+                  </View>
+                </View>
+              ))}
+            </ScrollView>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }

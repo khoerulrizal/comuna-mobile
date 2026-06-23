@@ -91,6 +91,11 @@ export function Pill({
   style?: ViewStyle;
 }) {
   const t = PILL_TONES[tone];
+  // Bungkus dalam <Txt> bila ada child string/angka (termasuk hasil interpolasi
+  // yang menjadi array, mis. `Teks ({n} m)`), agar tidak ada teks telanjang di View.
+  const hasText = React.Children.toArray(children).some(
+    (c) => typeof c === "string" || typeof c === "number",
+  );
   return (
     <View
       style={[
@@ -107,7 +112,7 @@ export function Pill({
         style,
       ]}
     >
-      {typeof children === "string" ? (
+      {hasText ? (
         <Txt weight="semibold" size={11.5} color={t.fg}>
           {children}
         </Txt>
@@ -149,6 +154,7 @@ export function Button({
   variant = "primary",
   size = "md",
   full = false,
+  disabled = false,
   onPress,
   left,
   style,
@@ -157,6 +163,7 @@ export function Button({
   variant?: ButtonVariant;
   size?: ButtonSize;
   full?: boolean;
+  disabled?: boolean;
   onPress?: () => void;
   left?: React.ReactNode;
   style?: ViewStyle;
@@ -165,7 +172,8 @@ export function Button({
   const s = BTN_SIZES[size];
   return (
     <Pressable
-      onPress={onPress}
+      onPress={disabled ? undefined : onPress}
+      disabled={disabled}
       style={({ pressed }) => [
         {
           height: s.h,
@@ -179,9 +187,9 @@ export function Button({
           justifyContent: "center",
           gap: 8,
           width: full ? "100%" : undefined,
-          opacity: pressed ? 0.85 : 1,
+          opacity: disabled ? 0.45 : pressed ? 0.85 : 1,
         },
-        variant === "primary" ? shadows.elevated : null,
+        variant === "primary" && !disabled ? shadows.elevated : null,
         style,
       ]}
     >

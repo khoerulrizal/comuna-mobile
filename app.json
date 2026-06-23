@@ -44,6 +44,26 @@
         {
           "faceIDPermission": "Comuna menggunakan Face ID untuk membuka aplikasi dengan aman."
         }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Comuna memerlukan kamera untuk swafoto saat absen kehadiran.",
+          "recordAudioAndroid": false
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Comuna memerlukan lokasi untuk memvalidasi kehadiran di area kantor."
+        }
+      ],
+      [
+        "expo-maps",
+        {
+          "requestLocationPermission": true,
+          "locationPermission": "Comuna menampilkan posisi Anda di peta untuk validasi kehadiran."
+        }
       ]
     ],
     "experiments": {
