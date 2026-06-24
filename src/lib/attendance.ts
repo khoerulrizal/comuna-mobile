@@ -1,5 +1,6 @@
 // Kehadiran (clock-in/out) — context + lokasi (anti fake-GPS) + unggah swafoto + submit.
 import * as Location from "expo-location";
+import { getInfoAsync, uploadAsync, FileSystemUploadType } from "expo-file-system/legacy";
 import { api } from "./api";
 
 export type AttendanceStatus = "BEFORE_CLOCKIN" | "CLOCKED_IN" | "DONE";
@@ -17,7 +18,23 @@ export interface ClockLocation {
 }
 
 export interface ClockContext {
-  shift: { id: string; name: string; isWorkingDay: boolean; holidayName: string | null } | null;
+  shift: {
+    id: string;
+    name: string;
+    isWorkingDay: boolean;
+    holidayName: string | null;
+    startTime: string | null; // "HH:mm"
+    endTime: string | null;
+    startMin: number | null; // menit-dari-tengah-malam (zona shift)
+    endMin: number | null;
+    locationType: string;
+  } | null;
+  employee: {
+    fullName: string;
+    position: string | null;
+    department: string | null;
+    photoUrl: string | null;
+  } | null;
   validation: { gps: boolean; photo: boolean; fingerprint: boolean; none: boolean } | null;
   location: {
     anywhere: boolean;
@@ -88,24 +105,30 @@ export function distanceMeters(lat1: number, lng1: number, lat2: number, lng2: n
   return 2 * R * Math.asin(Math.min(1, Math.sqrt(a)));
 }
 
-/** Unggah swafoto ke Spaces via presigned PUT; kembalikan URL CDN publik. */
+/**
+ * Unggah swafoto ke Spaces via presigned PUT; kembalikan URL CDN publik.
+ * Pakai expo-file-system `uploadAsync` (PUT biner langsung dari file URI) — RN/Hermes
+ * tak mendukung pembuatan Blob dari ArrayBuffer, jadi pola fetch(uri).blob() gagal.
+ */
 export async function uploadSelfie(uri: string): Promise<string> {
-  const fileRes = await fetch(uri);
-  const blob = await fileRes.blob();
+  const info = await getInfoAsync(uri);
+  const size = info.exists ? info.size : 0;
   const presign = await api<{ uploadUrl: string; fileUrl: string; headers: Record<string, string> }>(
     "/api/v1/uploads/presign",
     {
       method: "POST",
       auth: true,
-      body: { folder: "evidence", contentType: "image/jpeg", fileName: "selfie.jpg", size: blob.size },
+      body: { folder: "evidence", contentType: "image/jpeg", fileName: "selfie.jpg", size },
     },
   );
-  const put = await fetch(presign.uploadUrl, {
-    method: "PUT",
+  const res = await uploadAsync(presign.uploadUrl, uri, {
+    httpMethod: "PUT",
+    uploadType: FileSystemUploadType.BINARY_CONTENT,
     headers: { "Content-Type": "image/jpeg", ...presign.headers },
-    body: blob,
   });
-  if (!put.ok) throw new Error("Gagal mengunggah swafoto");
+  if (res.status < 200 || res.status >= 300) {
+    throw new Error(`Gagal mengunggah swafoto (HTTP ${res.status})`);
+  }
   return presign.fileUrl;
 }
 

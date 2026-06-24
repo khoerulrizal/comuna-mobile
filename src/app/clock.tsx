@@ -1,7 +1,7 @@
 // Flow clock-in/out — lokasi → wajah(swafoto) → catatan → tinjau → sukses.
 // Langkah menyesuaikan validationTypes shift. Validasi final tetap di server.
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Image, Pressable, ScrollView, TextInput, View } from "react-native";
+import { ActivityIndicator, Image, Pressable, ScrollView, TextInput, View, type ViewStyle } from "react-native";
 import { router } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -21,6 +21,43 @@ import {
   type ClockLocation,
   type GpsReading,
 } from "@/lib/attendance";
+import { liveClock, dateLabel, timeHMS } from "@/lib/home";
+
+// Menit-dari-tengah-malam (zona ber-offset) dari sebuah ISO; null bila kosong.
+function isoToMinutes(iso: string | null, offsetMin: number): number | null {
+  if (!iso) return null;
+  const t = Date.parse(iso);
+  if (Number.isNaN(t)) return null;
+  const d = new Date(t + offsetMin * 60000);
+  return d.getUTCHours() * 60 + d.getUTCMinutes();
+}
+
+// "Tepat waktu" / "Terlambat N menit" / "N menit lebih awal" relatif jam mulai shift.
+function punctuality(recordedMin: number | null, startMin: number | null): { text: string; tone: "mint" | "rose" | "amber" } {
+  if (recordedMin == null || startMin == null) return { text: "Tercatat", tone: "mint" };
+  const diff = recordedMin - startMin;
+  if (diff <= 0) return { text: diff === 0 ? "Tepat waktu" : `${-diff} menit lebih awal`, tone: "mint" };
+  return { text: `Terlambat ${diff} menit`, tone: diff <= 5 ? "amber" : "rose" };
+}
+
+// Menit → "1 jam 30 menit" / "2 jam" / "45 menit".
+function fmtHM(min: number): string {
+  const h = Math.floor(min / 60);
+  const m = min % 60;
+  if (h > 0 && m > 0) return `${h} jam ${m} menit`;
+  if (h > 0) return `${h} jam`;
+  return `${m} menit`;
+}
+
+// Status pulang relatif jam selesai shift: lebih awal / lembur / tepat.
+function leaveTiming(recordedMin: number | null, endMin: number | null): { text: string; tone: "mint" | "rose" | "amber" } {
+  if (recordedMin == null || endMin == null) return { text: "Tercatat", tone: "mint" };
+  let diff = recordedMin - endMin;
+  if (diff < -720) diff += 1440; // pulang lewat tengah malam (shift malam)
+  if (diff === 0) return { text: "Tepat jam pulang", tone: "mint" };
+  if (diff < 0) return { text: `Pulang ${fmtHM(-diff)} lebih awal`, tone: diff >= -15 ? "amber" : "rose" };
+  return { text: `Lembur ${fmtHM(diff)}`, tone: "mint" };
+}
 
 type Step = "location" | "face" | "note" | "review";
 
@@ -36,7 +73,12 @@ export default function ClockScreen() {
   const [note, setNote] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [submitErr, setSubmitErr] = useState<string | null>(null);
-  const [done, setDone] = useState<null | { label: string; detail: string }>(null);
+  const [done, setDone] = useState<null | {
+    kind: "in" | "out";
+    iso: string | null;
+    status: string | null;
+    workingHours: number | null;
+  }>(null);
 
   const action = ctx?.clock?.attendanceStatus === "CLOCKED_IN" ? "out" : "in";
 
@@ -80,10 +122,10 @@ export default function ClockScreen() {
       };
       if (action === "out") {
         const r = await submitClockOut(body);
-        setDone({ label: "Clock-out berhasil", detail: r.workingHours != null ? `Jam kerja tercatat ${r.workingHours} jam` : "Sampai jumpa besok!" });
+        setDone({ kind: "out", iso: r.clockOut, status: null, workingHours: r.workingHours });
       } else {
         const r = await submitClockIn(body);
-        setDone({ label: "Clock-in berhasil", detail: r.status === "LATE" ? "Tercatat: Terlambat" : "Tercatat: Tepat waktu" });
+        setDone({ kind: "in", iso: r.clockIn, status: r.status, workingHours: null });
       }
     } catch (e) {
       if (e instanceof AuthError) return router.replace("/login");
@@ -95,15 +137,82 @@ export default function ClockScreen() {
 
   // ── Render states ──────────────────────────────────────────────────────────
   if (done) {
+    const off = ctx?.tzOffsetMinutes ?? 0;
+    const tzAbbr = ctx?.tzAbbr ?? "";
+    const recordedTime = timeHMS(done.iso, off); // "HH:mm:ss"
+    const recordedDate = done.iso ? dateLabel(Date.parse(done.iso), off) : null;
+    const isOut = done.kind === "out";
+    // Tema: hijau utk clock-in, merah utk clock-out.
+    const theme = isOut
+      ? { tint: colors.rose[500], badgeBg: colors.rose[100], badgeFg: colors.rose[700] }
+      : { tint: colors.mint[500], badgeBg: colors.mint[100], badgeFg: colors.mint[700] };
+
+    // Timing: clock-in vs jam datang, clock-out vs jam pulang.
+    const recMin = isoToMinutes(done.iso, off);
+    const timing = isOut
+      ? leaveTiming(recMin, ctx?.shift?.endMin ?? null)
+      : punctuality(recMin, ctx?.shift?.startMin ?? null);
+
+    // Durasi hadir (clock-out): dari jam datang (clock-in) ke clock-out.
+    let workedLabel: string | null = null;
+    if (isOut && done.iso && ctx?.clock?.clockIn) {
+      const ms = Date.parse(done.iso) - Date.parse(ctx.clock.clockIn);
+      if (!Number.isNaN(ms) && ms > 0) workedLabel = fmtHM(Math.round(ms / 60000));
+    }
+
+    const emp = ctx?.employee;
+    const empMeta = [emp?.department, emp?.position].filter(Boolean).join(" · ");
+
     return (
       <Shell insets={insets} title="" onBack={null}>
-        <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 32, gap: 18 }}>
-          <View style={{ width: 88, height: 88, borderRadius: 28, backgroundColor: colors.mint[100], alignItems: "center", justifyContent: "center" }}>
-            <Icon name="check" size={44} color={colors.mint[700]} strokeWidth={2.5} />
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 28, gap: 12 }}>
+          <View style={{ width: 92, height: 92, borderRadius: 30, backgroundColor: theme.badgeBg, alignItems: "center", justifyContent: "center" }}>
+            <Icon name="check" size={46} color={theme.badgeFg} strokeWidth={2.5} />
           </View>
-          <Txt size={20} weight="extrabold" color={colors.neutral[900]}>{done.label}</Txt>
-          <Txt size={14} color={colors.neutral[500]} style={{ textAlign: "center" }}>{done.detail}</Txt>
-          <Button label="Selesai" size="lg" full onPress={() => router.back()} style={{ marginTop: 8 }} />
+          <Txt size={21} weight="extrabold" color={colors.neutral[900]} style={{ textAlign: "center" }}>
+            {isOut ? "Clock Out Berhasil" : "Clock In Berhasil"}
+          </Txt>
+
+          {/* Identitas */}
+          {emp?.fullName ? (
+            <View style={{ alignItems: "center", gap: 1 }}>
+              <Txt size={15} weight="bold" color={colors.neutral[800]} style={{ textAlign: "center" }}>{emp.fullName}</Txt>
+              {empMeta ? <Txt size={12} color={colors.neutral[400]} style={{ textAlign: "center" }}>{empMeta}</Txt> : null}
+            </View>
+          ) : null}
+
+          {recordedDate ? (
+            <Txt size={13} color={colors.neutral[500]} style={{ textAlign: "center" }}>{recordedDate}</Txt>
+          ) : null}
+
+          {/* Waktu terekam jam:menit:detik */}
+          <View style={{ alignItems: "center", marginTop: 2 }}>
+            <Txt size={12} color={colors.neutral[400]} style={{ textAlign: "center" }}>Waktu terekam</Txt>
+            <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 6 }}>
+              <Txt size={40} weight="extrabold" color={theme.tint}>{recordedTime ?? "—"}</Txt>
+              {tzAbbr ? <Txt size={14} weight="bold" color={colors.neutral[400]} style={{ marginBottom: 7 }}>{tzAbbr}</Txt> : null}
+            </View>
+          </View>
+
+          {/* Timing relatif shift */}
+          <Pill tone={timing.tone}>{timing.text}</Pill>
+
+          {/* Durasi hadir (clock-out) */}
+          {workedLabel ? (
+            <Txt size={12.5} color={colors.neutral[500]} style={{ textAlign: "center" }}>
+              {`Durasi hadir ${workedLabel} sejak jam datang`}
+            </Txt>
+          ) : null}
+
+          <Button
+            label="Kembali ke Home"
+            size="lg"
+            full
+            variant={isOut ? "danger" : "primary"}
+            onPress={() => router.back()}
+            left={<Icon name="home" size={18} color="#fff" strokeWidth={2} />}
+            style={{ marginTop: 14 }}
+          />
         </View>
       </Shell>
     );
@@ -151,7 +260,7 @@ export default function ClockScreen() {
       {step === "location" && (
         <LocationStep ctx={ctx} gps={gps} setGps={setGps} onNext={goNext} />
       )}
-      {step === "face" && <FaceStep photoUri={photoUri} setPhotoUri={setPhotoUri} onNext={goNext} />}
+      {step === "face" && <FaceStep photoUri={photoUri} setPhotoUri={setPhotoUri} onNext={goNext} tzOffset={ctx.tzOffsetMinutes} tzAbbr={ctx.tzAbbr} />}
       {step === "note" && <NoteStep note={note} setNote={setNote} onNext={goNext} />}
       {step === "review" && (
         <ReviewStep
@@ -199,7 +308,7 @@ function Shell({
         {steps ? (
           <View style={{ flexDirection: "row", gap: 5 }}>
             {Array.from({ length: steps }).map((_, i) => (
-              <View key={i} style={{ width: i === stepIdx ? 18 : 7, height: 7, borderRadius: 4, backgroundColor: i === stepIdx ? colors.brand[500] : colors.neutral[200] }} />
+              <View key={i} style={{ width: 22, height: 5, borderRadius: 3, backgroundColor: i <= (stepIdx ?? 0) ? colors.brand[500] : colors.neutral[200] }} />
             ))}
           </View>
         ) : null}
@@ -472,50 +581,33 @@ function StatusBanner({ tone, text, busy }: { tone: "mint" | "rose" | "amber"; t
   );
 }
 
-// Judul langkah dgn icon-badge (selaras Home/Profil).
-function StepHeader({ icon, title, subtitle, accent = colors.brand[500] }: { icon: IconName; title: string; subtitle?: string; accent?: string }) {
-  return (
-    <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-      <View style={{ width: 42, height: 42, borderRadius: 13, backgroundColor: accent + "14", alignItems: "center", justifyContent: "center" }}>
-        <Icon name={icon} size={20} color={accent} strokeWidth={2} />
-      </View>
-      <View style={{ flex: 1 }}>
-        <Txt size={17} weight="extrabold" color={colors.neutral[900]}>{title}</Txt>
-        {subtitle ? <Txt size={12.5} color={colors.neutral[500]} style={{ marginTop: 1 }}>{subtitle}</Txt> : null}
-      </View>
-    </View>
-  );
-}
-
-// Baris info dgn icon-badge + divider (gaya InfoRow Profil).
-function InfoRow({ icon, label, value, accent = colors.neutral[400], valueColor, last }: { icon: IconName; label: string; value: string; accent?: string; valueColor?: string; last?: boolean }) {
-  return (
-    <View style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 14, paddingVertical: 13, borderBottomWidth: last ? 0 : 1, borderColor: colors.neutral[100] }}>
-      <View style={{ width: 34, height: 34, borderRadius: 10, backgroundColor: accent + "1A", alignItems: "center", justifyContent: "center" }}>
-        <Icon name={icon} size={16} color={accent} strokeWidth={2} />
-      </View>
-      <Txt size={12.5} color={colors.neutral[500]} style={{ flex: 1 }}>{label}</Txt>
-      <Txt size={13} weight="bold" color={valueColor ?? colors.neutral[800]} style={{ maxWidth: "52%", textAlign: "right" }}>{value}</Txt>
-    </View>
-  );
-}
 
 // ── Step: Wajah (swafoto) ──────────────────────────────────────────────────────
-function FaceStep({ photoUri, setPhotoUri, onNext }: { photoUri: string | null; setPhotoUri: (u: string | null) => void; onNext: () => void }) {
+function FaceStep({ photoUri, setPhotoUri, onNext, tzOffset, tzAbbr }: { photoUri: string | null; setPhotoUri: (u: string | null) => void; onNext: () => void; tzOffset: number; tzAbbr: string | null }) {
   const [perm, requestPerm] = useCameraPermissions();
   const camRef = useRef<CameraView>(null);
   const [capturing, setCapturing] = useState(false);
+  // Waktu pengambilan swafoto (epoch) — ditampilkan dalam zona shift sbg bukti.
+  const [capturedAt, setCapturedAt] = useState<number | null>(null);
 
   useEffect(() => {
     if (perm && !perm.granted && perm.canAskAgain) requestPerm();
   }, [perm, requestPerm]);
+
+  // Reset stempel waktu bila foto dihapus (Ulangi).
+  useEffect(() => {
+    if (!photoUri) setCapturedAt(null);
+  }, [photoUri]);
 
   async function capture() {
     if (!camRef.current || capturing) return;
     setCapturing(true);
     try {
       const pic = await camRef.current.takePictureAsync({ quality: 0.5 });
-      if (pic?.uri) setPhotoUri(pic.uri);
+      if (pic?.uri) {
+        setCapturedAt(Date.now());
+        setPhotoUri(pic.uri);
+      }
     } finally {
       setCapturing(false);
     }
@@ -533,70 +625,196 @@ function FaceStep({ photoUri, setPhotoUri, onNext }: { photoUri: string | null; 
     );
   }
 
-  // Bingkai lingkaran "Pindai Wajah" (selaras desain Corelia FaceIdScreen).
+  // Layar "Ambil swafoto": bingkai bulat + corner bracket, shutter putih, badge wajah.
   return (
-    <View style={{ flex: 1, backgroundColor: colors.neutral[900], padding: 20, alignItems: "center" }}>
-      <Txt size={18} weight="extrabold" color="#fff" style={{ marginTop: 4 }}>Pindai Wajah</Txt>
-      <Txt size={13} color="rgba(255,255,255,0.7)" style={{ textAlign: "center", marginTop: 6 }}>
-        Posisikan wajah dalam lingkaran lalu ambil foto.
-      </Txt>
-      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", width: "100%" }}>
-        <View
-          style={{
-            width: 260,
-            height: 260,
-            borderRadius: 130,
-            overflow: "hidden",
-            borderWidth: 4,
-            borderColor: photoUri ? colors.mint[500] : colors.brand[400],
-            backgroundColor: "#000",
-          }}
-        >
+    <View style={{ flex: 1, backgroundColor: colors.neutral[900], paddingHorizontal: 20, paddingTop: 10, paddingBottom: 22 }}>
+      <Txt size={20} weight="extrabold" color="#fff" style={{ textAlign: "center", alignSelf: "stretch" }}>Ambil swafoto</Txt>
+
+      {/* Instruksi atas (sebelum ambil) */}
+      <View style={{ alignItems: "center", marginTop: 14, height: 34 }}>
+        {!photoUri ? (
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 7, paddingHorizontal: 13, paddingVertical: 7, borderRadius: radii.pill, backgroundColor: "rgba(255,255,255,0.08)" }}>
+            <Icon name="info" size={14} color="rgba(255,255,255,0.85)" strokeWidth={2} />
+            <Txt size={12.5} color="rgba(255,255,255,0.85)">Posisikan wajah dalam bingkai</Txt>
+          </View>
+        ) : null}
+      </View>
+
+      {/* Bingkai kamera + corner bracket */}
+      <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+        <View style={{ width: 286, height: 286, alignItems: "center", justifyContent: "center" }}>
+          <View
+            style={{
+              width: 256,
+              height: 256,
+              borderRadius: 128,
+              overflow: "hidden",
+              backgroundColor: "#000",
+            }}
+          >
+            {photoUri ? (
+              <Image source={{ uri: photoUri }} style={{ flex: 1 }} resizeMode="cover" />
+            ) : (
+              <CameraView ref={camRef} style={{ flex: 1 }} facing="front" />
+            )}
+          </View>
+          {/* Cincin dashed */}
+          <View
+            pointerEvents="none"
+            style={{
+              position: "absolute",
+              width: 272,
+              height: 272,
+              borderRadius: 136,
+              borderWidth: 2,
+              borderStyle: "dashed",
+              borderColor: photoUri ? colors.mint[500] : colors.brand[400],
+            }}
+          />
+          {/* Corner bracket */}
+          <CornerBracket pos="tl" color={colors.brand[400]} />
+          <CornerBracket pos="tr" color={colors.brand[400]} />
+          <CornerBracket pos="bl" color={colors.brand[400]} />
+          <CornerBracket pos="br" color={colors.brand[400]} />
+        </View>
+
+        {/* Badge "Wajah terdeteksi" + stempel waktu zona shift (muncul setelah ambil) */}
+        <View style={{ minHeight: 52, marginTop: 14, alignItems: "center", justifyContent: "center", gap: 6 }}>
           {photoUri ? (
-            <Image source={{ uri: photoUri }} style={{ flex: 1 }} resizeMode="cover" />
-          ) : (
-            <CameraView ref={camRef} style={{ flex: 1 }} facing="front" />
-          )}
+            <>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 7, paddingHorizontal: 14, paddingVertical: 8, borderRadius: radii.pill, backgroundColor: colors.mint[500] }}>
+                <Icon name="check" size={15} color="#fff" strokeWidth={2.5} />
+                <Txt size={12.5} weight="bold" color="#fff">Wajah terdeteksi</Txt>
+              </View>
+              {capturedAt != null ? (
+                <Txt size={10.5} color="rgba(255,255,255,0.6)" style={{ textAlign: "center" }}>
+                  {`${dateLabel(capturedAt, tzOffset)} · ${liveClock(capturedAt, tzOffset)}${tzAbbr ? " " + tzAbbr : ""}`}
+                </Txt>
+              ) : null}
+            </>
+          ) : null}
         </View>
       </View>
+
+      {/* Kontrol bawah */}
       {photoUri ? (
         <View style={{ flexDirection: "row", gap: 10, width: "100%" }}>
-          <Button label="Ulangi" variant="outline" size="md" onPress={() => setPhotoUri(null)} style={{ flex: 1 }} />
-          <Button label="Lanjut" size="md" onPress={onNext} style={{ flex: 1 }} />
+          <Button label="Ulangi" variant="outline" size="lg" onPress={() => setPhotoUri(null)} style={{ flex: 1 }} />
+          <Button label="Lanjut" size="lg" onPress={onNext} style={{ flex: 1 }} />
         </View>
       ) : (
-        <Button label={capturing ? "Mengambil…" : "Ambil Foto"} size="lg" full onPress={capture} left={<Icon name="camera" size={18} color="#fff" strokeWidth={2} />} />
+        <View style={{ alignItems: "center" }}>
+          <Pressable
+            onPress={capture}
+            disabled={capturing}
+            hitSlop={10}
+            style={{
+              width: 76,
+              height: 76,
+              borderRadius: 38,
+              borderWidth: 5,
+              borderColor: "rgba(255,255,255,0.45)",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <View style={{ width: 58, height: 58, borderRadius: 29, backgroundColor: "#fff", alignItems: "center", justifyContent: "center" }}>
+              {capturing ? <ActivityIndicator color={colors.brand[500]} /> : null}
+            </View>
+          </Pressable>
+        </View>
       )}
     </View>
   );
 }
 
+// Corner bracket sudut bingkai swafoto.
+function CornerBracket({ pos, color }: { pos: "tl" | "tr" | "bl" | "br"; color: string }) {
+  const s = 26;
+  const base: ViewStyle = { position: "absolute", width: s, height: s, borderColor: color };
+  const corner: Record<typeof pos, ViewStyle> = {
+    tl: { top: 0, left: 0, borderTopWidth: 3, borderLeftWidth: 3, borderTopLeftRadius: 14 },
+    tr: { top: 0, right: 0, borderTopWidth: 3, borderRightWidth: 3, borderTopRightRadius: 14 },
+    bl: { bottom: 0, left: 0, borderBottomWidth: 3, borderLeftWidth: 3, borderBottomLeftRadius: 14 },
+    br: { bottom: 0, right: 0, borderBottomWidth: 3, borderRightWidth: 3, borderBottomRightRadius: 14 },
+  };
+  return <View pointerEvents="none" style={[base, corner[pos]]} />;
+}
+
 // ── Step: Catatan ──────────────────────────────────────────────────────────────
+const NOTE_SUGGESTIONS = ["Meeting klien", "WFH", "Di luar kota", "Training", "Site visit"];
+
 function NoteStep({ note, setNote, onNext }: { note: string; setNote: (s: string) => void; onNext: () => void }) {
+  // Tambahkan saran ke catatan (hindari duplikat, sisipkan dengan pemisah).
+  function addSuggestion(s: string) {
+    const cur = note.trim();
+    if (cur.length === 0) return setNote(s);
+    if (cur.toLowerCase().includes(s.toLowerCase())) return;
+    setNote(`${cur}, ${s}`);
+  }
+
   return (
-    <ScrollView contentContainerStyle={{ padding: 20, gap: 16 }}>
-      <StepHeader icon="doc" title="Catatan (opsional)" subtitle="Mis. alasan keterlambatan atau keterangan lain." accent={colors.coral[500]} />
-      <TextInput
-        value={note}
-        onChangeText={setNote}
-        placeholder="Tulis catatan…"
-        placeholderTextColor={colors.neutral[300]}
-        multiline
-        style={{
-          minHeight: 120,
-          backgroundColor: "#fff",
-          borderRadius: radii.lg,
-          borderWidth: 1,
-          borderColor: colors.neutral[100],
-          padding: 14,
-          fontSize: 14,
-          fontFamily: fonts.regular,
-          color: colors.neutral[800],
-          textAlignVertical: "top",
-        }}
-      />
-      <Button label="Lanjut" size="md" full onPress={onNext} />
-    </ScrollView>
+    <View style={{ flex: 1 }}>
+      <ScrollView contentContainerStyle={{ padding: 20, gap: 16 }} keyboardShouldPersistTaps="handled">
+        <View>
+          <Txt size={20} weight="extrabold" color={colors.neutral[900]}>Tambahkan catatan</Txt>
+          <Txt size={12.5} color={colors.neutral[500]} style={{ marginTop: 4, lineHeight: 18 }}>
+            Opsional. Tambahkan catatan bila perlu, misalnya lokasi kerja di luar kantor atau agenda khusus hari ini.
+          </Txt>
+        </View>
+
+        <TextInput
+          value={note}
+          onChangeText={setNote}
+          placeholder="Hari ini akan meeting dengan vendor di BSD pukul 14:00. Sore kembali ke kantor untuk design review."
+          placeholderTextColor={colors.neutral[300]}
+          multiline
+          style={{
+            minHeight: 130,
+            backgroundColor: "#fff",
+            borderRadius: radii.lg,
+            borderWidth: 1,
+            borderColor: colors.neutral[100],
+            padding: 14,
+            fontSize: 14,
+            fontFamily: fonts.regular,
+            color: colors.neutral[800],
+            textAlignVertical: "top",
+            ...shadows.card,
+          }}
+        />
+
+        <View>
+          <Txt size={11} weight="bold" color={colors.neutral[400]} style={{ letterSpacing: 0.5, marginBottom: 10 }}>
+            SARAN CEPAT
+          </Txt>
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+            {NOTE_SUGGESTIONS.map((s) => (
+              <Pressable
+                key={s}
+                onPress={() => addSuggestion(s)}
+                style={{
+                  paddingHorizontal: 14,
+                  paddingVertical: 8,
+                  borderRadius: radii.pill,
+                  borderWidth: 1,
+                  borderColor: colors.neutral[200],
+                  backgroundColor: "#fff",
+                }}
+              >
+                <Txt size={12.5} weight="semibold" color={colors.neutral[700]}>{s}</Txt>
+              </Pressable>
+            ))}
+          </View>
+        </View>
+      </ScrollView>
+
+      {/* Footer tombol tetap di bawah (konsisten dgn langkah Lokasi) */}
+      <View style={{ flexDirection: "row", gap: 10, paddingHorizontal: 20, paddingTop: 12, paddingBottom: 6, backgroundColor: colors.neutral[25], borderTopWidth: 1, borderColor: colors.neutral[100] }}>
+        <Button label="Lewati" variant="outline" size="lg" onPress={() => { setNote(""); onNext(); }} style={{ flex: 1 }} />
+        <Button label="Lanjut" size="lg" onPress={onNext} style={{ flex: 1 }} />
+      </View>
+    </View>
   );
 }
 
@@ -621,42 +839,118 @@ function ReviewStep({
   onSubmit: () => void;
 }) {
   const v = ctx.validation;
-  const lastIsNote = !!note.trim();
+  const off = ctx.tzOffsetMinutes;
+  const headerColor = action === "out" ? colors.rose[500] : colors.brand[500];
+
+  // Jam berjalan (zona shift) — tik tiap detik.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+  const clockStr = liveClock(now, off).slice(0, 5); // "HH:mm"
+  const dateStr = dateLabel(now, off);
+  let localMin = Math.floor(now / 60000 + off) % 1440;
+  if (localMin < 0) localMin += 1440;
+  const punct = punctuality(localMin, ctx.shift?.startMin ?? null);
+  const startTime = ctx.shift?.startTime;
+  const endTime = ctx.shift?.endTime;
+  const shiftWindow = startTime && endTime ? `${startTime} - ${endTime}` : null;
+
+  // Lokasi acuan terdekat (untuk baris Lokasi).
+  const anywhere = ctx.location?.anywhere ?? false;
+  const homeNotSet = ctx.location?.homeNotSet ?? false;
+  const mode = ctx.location?.mode;
+  let nearestName: string | null = null;
+  let nearestDist: number | null = null;
+  if (gps && !anywhere) {
+    for (const l of ctx.location?.locations ?? []) {
+      const d = distanceMeters(gps.latitude, gps.longitude, l.latitude, l.longitude);
+      if (nearestDist == null || d < nearestDist) { nearestDist = d; nearestName = l.name; }
+    }
+  }
+  const locValue = anywhere
+    ? homeNotSet ? "Rumah (belum diatur)" : mode === "WFH" ? "Di rumah" : "Di mana saja"
+    : nearestName ?? "—";
+  const locSub = !anywhere && nearestDist != null ? `~${Math.round(nearestDist)} m dari titik pusat` : null;
+
+  const emp = ctx.employee;
+  const initials = (emp?.fullName ?? "")
+    .split(" ").map((s) => s[0]).slice(0, 2).join("").toUpperCase() || "—";
+  const noteText = note.trim();
+
+  const headerPillText =
+    action === "in"
+      ? shiftWindow ? `${punct.text} · shift ${shiftWindow}` : punct.text
+      : shiftWindow ? `Shift ${shiftWindow}` : "";
+
   return (
     <ScrollView contentContainerStyle={{ padding: 20, gap: 16 }}>
-      <StepHeader
-        icon="check"
-        title={`Tinjau ${action === "out" ? "Clock Out" : "Clock In"}`}
-        subtitle="Pastikan data benar sebelum dikirim."
-        accent={action === "out" ? colors.rose[500] : colors.brand[500]}
-      />
+      <Txt size={20} weight="extrabold" color={colors.neutral[900]}>Tinjau & konfirmasi</Txt>
 
-      <Card pad={0} radius={18}>
-        <InfoRow icon="briefcase" accent={colors.brand[500]} label="Shift" value={ctx.shift?.name ?? "—"} last={!v?.gps && !v?.photo && !lastIsNote} />
-        {v?.gps ? (
-          <InfoRow
-            icon="mapPin"
-            accent={colors.mint[500]}
-            label="Lokasi"
-            value={gps ? `${gps.latitude.toFixed(4)}, ${gps.longitude.toFixed(4)}` : "—"}
-            last={!v?.photo && !lastIsNote}
-          />
-        ) : null}
-        {v?.photo ? (
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 14, paddingVertical: 11, borderBottomWidth: lastIsNote ? 1 : 0, borderColor: colors.neutral[100] }}>
-            <View style={{ width: 34, height: 34, borderRadius: 10, backgroundColor: colors.coral[500] + "1A", alignItems: "center", justifyContent: "center" }}>
-              <Icon name="camera" size={16} color={colors.coral[500]} strokeWidth={2} />
+      {/* Header: identitas + jam berjalan + status */}
+      <View style={{ borderRadius: 22, backgroundColor: headerColor, padding: 18, gap: 12, ...shadows.elevated }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 11 }}>
+          {emp?.photoUrl ? (
+            <Image source={{ uri: emp.photoUrl }} style={{ width: 40, height: 40, borderRadius: 12 }} />
+          ) : (
+            <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: "rgba(255,255,255,0.2)", alignItems: "center", justifyContent: "center" }}>
+              <Txt size={14} weight="extrabold" color="#fff">{initials}</Txt>
             </View>
-            <Txt size={12.5} color={colors.neutral[500]} style={{ flex: 1 }}>Swafoto</Txt>
-            {photoUri ? (
-              <Image source={{ uri: photoUri }} style={{ width: 40, height: 40, borderRadius: 10 }} />
-            ) : (
-              <Txt size={12.5} weight="bold" color={colors.rose[700]}>Belum ada</Txt>
-            )}
+          )}
+          <View style={{ flex: 1 }}>
+            <Txt size={14} weight="bold" color="#fff" numberOfLines={1}>{emp?.fullName ?? "Karyawan"}</Txt>
+            <Txt size={11.5} color="rgba(255,255,255,0.75)" numberOfLines={1}>{emp?.position ?? "—"}</Txt>
+          </View>
+        </View>
+
+        <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 7 }}>
+          <Txt size={38} weight="extrabold" color="#fff">{clockStr}</Txt>
+          {ctx.tzAbbr ? <Txt size={14} weight="bold" color="rgba(255,255,255,0.75)" style={{ marginBottom: 7 }}>{ctx.tzAbbr}</Txt> : null}
+        </View>
+        <Txt size={12} color="rgba(255,255,255,0.8)">{dateStr}</Txt>
+
+        {headerPillText ? (
+          <View style={{ flexDirection: "row", alignSelf: "flex-start", alignItems: "center", gap: 7, paddingHorizontal: 12, paddingVertical: 7, borderRadius: radii.pill, backgroundColor: "rgba(255,255,255,0.18)" }}>
+            <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: "#fff" }} />
+            <Txt size={12} weight="bold" color="#fff">{headerPillText}</Txt>
           </View>
         ) : null}
-        {lastIsNote ? <InfoRow icon="doc" accent={colors.neutral[500]} label="Catatan" value={note.trim()} last /> : null}
+      </View>
+
+      {/* Rincian */}
+      <Card pad={0} radius={18}>
+        {v?.gps ? (
+          <ReviewRow icon="mapPin" accent={colors.mint[500]} label="Lokasi" value={locValue} sub={locSub} />
+        ) : null}
+        {v?.photo ? (
+          <ReviewRow
+            icon="camera"
+            accent={colors.coral[500]}
+            label="Swafoto"
+            value="Verified"
+            valueColor={colors.mint[700]}
+            right={photoUri ? <Image source={{ uri: photoUri }} style={{ width: 40, height: 40, borderRadius: 10 }} /> : undefined}
+          />
+        ) : null}
+        {noteText ? <ReviewRow icon="doc" accent={colors.neutral[500]} label="Catatan" value={noteText} /> : null}
+        <ReviewRow
+          icon="clock"
+          accent={colors.brand[500]}
+          label="Shift"
+          value={shiftWindow ? `${shiftWindow} · ${ctx.shift?.name ?? ""}`.trim() : ctx.shift?.name ?? "—"}
+          sub={mode ? `${nearestName ? nearestName + " " : ""}(${mode})` : null}
+          last
+        />
       </Card>
+
+      {/* Catatan keamanan */}
+      <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 9, paddingHorizontal: 4 }}>
+        <Icon name="shield" size={15} color={colors.neutral[400]} strokeWidth={2} />
+        <Txt size={11.5} color={colors.neutral[400]} style={{ flex: 1, lineHeight: 16 }}>
+          Data kehadiran terenkripsi dan hanya digunakan untuk verifikasi kehadiran. Anda dapat meminta koreksi bila ada kesalahan.
+        </Txt>
+      </View>
 
       {error ? (
         <View style={{ alignItems: "center" }}>
@@ -669,9 +963,28 @@ function ReviewStep({
         variant={action === "out" ? "danger" : "primary"}
         size="lg"
         full
-        onPress={submitting ? undefined : onSubmit}
-        style={{ opacity: submitting ? 0.7 : 1 }}
+        disabled={submitting}
+        onPress={onSubmit}
       />
     </ScrollView>
+  );
+}
+
+// Baris rincian tinjau: icon-badge + label kecil + nilai (opsional sub & elemen kanan).
+function ReviewRow({ icon, accent, label, value, sub, valueColor, right, last }: {
+  icon: IconName; accent: string; label: string; value: string; sub?: string | null; valueColor?: string; right?: React.ReactNode; last?: boolean;
+}) {
+  return (
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: last ? 0 : 1, borderColor: colors.neutral[100] }}>
+      <View style={{ width: 34, height: 34, borderRadius: 10, backgroundColor: accent + "1A", alignItems: "center", justifyContent: "center" }}>
+        <Icon name={icon} size={16} color={accent} strokeWidth={2} />
+      </View>
+      <View style={{ flex: 1 }}>
+        <Txt size={11.5} color={colors.neutral[400]}>{label}</Txt>
+        <Txt size={13.5} weight="bold" color={valueColor ?? colors.neutral[800]} numberOfLines={2}>{value}</Txt>
+        {sub ? <Txt size={11} color={colors.neutral[400]} style={{ marginTop: 1 }}>{sub}</Txt> : null}
+      </View>
+      {right}
+    </View>
   );
 }
