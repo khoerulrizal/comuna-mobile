@@ -1,0 +1,3 @@
+PLACEHOLDER_TFLITE_MODEL — ganti file ini dengan model MobileFaceNet (.tflite) asli.
+File ini hanya agar bundler/require resolve. Saat masih placeholder, loadTensorflowModel
+akan gagal → pencocokan wajah dilewati (aman). Lihat assets/models/README.md.

@@ -36,6 +36,8 @@ export interface ClockContext {
     photoUrl: string | null;
   } | null;
   validation: { gps: boolean; photo: boolean; fingerprint: boolean; none: boolean } | null;
+  /** Pencocokan wajah: `required` = wajib match; `enrolled` = sudah daftar wajah. */
+  face?: { required: boolean; enrolled: boolean } | null;
   location: {
     anywhere: boolean;
     locations: ClockLocation[];
@@ -139,17 +141,25 @@ export interface ClockSubmit {
   mocked?: boolean;
   photoUrl?: string | null;
   note?: string | null;
+  /** Embedding wajah on-device (Fase 2); server bandingkan dgn referensi. */
+  faceEmbedding?: number[] | null;
+}
+
+/** Hasil pencocokan wajah; null bila tak dijalankan. passed=false → ditandai tinjau HR. */
+export interface FaceMatchResult {
+  score: number | null;
+  passed: boolean;
 }
 
 export async function submitClockIn(body: ClockSubmit) {
-  return api<{ success: boolean; clockIn: string | null; status: string }>(
+  return api<{ success: boolean; clockIn: string | null; status: string; faceMatch: FaceMatchResult | null }>(
     "/api/v1/attendance/clock-in",
     { method: "POST", auth: true, body },
   );
 }
 
 export async function submitClockOut(body: ClockSubmit) {
-  return api<{ success: boolean; clockOut: string | null; workingHours: number | null }>(
+  return api<{ success: boolean; clockOut: string | null; workingHours: number | null; faceMatch: FaceMatchResult | null }>(
     "/api/v1/attendance/clock-out",
     { method: "POST", auth: true, body },
   );

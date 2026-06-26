@@ -41,6 +41,12 @@ export interface Profile {
     supervisor: string | null;
   };
   hasPin: boolean;
+  /** Pendaftaran wajah (Fase 2). `available` = fitur aktif utk perusahaan. */
+  faceEnrollment?: {
+    available: boolean;
+    enrolled: boolean;
+    enrolledAt: string | null;
+  };
 }
 
 export async function getProfile(): Promise<Profile> {

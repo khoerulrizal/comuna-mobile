@@ -11,4 +11,7 @@ config.resolver.assetExts = config.resolver.assetExts.filter(
 );
 config.resolver.sourceExts.push("svg");
 
+// Model TFLite (pencocokan wajah on-device) di-bundle sebagai aset biner.
+config.resolver.assetExts.push("tflite");
+
 module.exports = config;

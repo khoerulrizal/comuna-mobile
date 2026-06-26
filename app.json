@@ -64,6 +64,19 @@
           "requestLocationPermission": true,
           "locationPermission": "Comuna menampilkan posisi Anda di peta untuk validasi kehadiran."
         }
+      ],
+      [
+        "react-native-fast-tflite",
+        {
+          "enableCoreMLDelegate": true
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Comuna memerlukan akses galeri untuk melampirkan dokumen pengajuan cuti.",
+          "cameraPermission": "Comuna memerlukan kamera untuk memfoto lampiran pengajuan cuti."
+        }
       ]
     ],
     "experiments": {

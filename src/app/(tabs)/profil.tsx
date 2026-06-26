@@ -296,6 +296,16 @@ export default function ProfilScreen() {
                 chevron
                 onPress={() => setShowPin(true)}
               />
+              {p.faceEnrollment?.available && (
+                <InfoRow
+                  label="Daftarkan Wajah"
+                  value={p.faceEnrollment.enrolled ? "Wajah terdaftar" : "Belum terdaftar"}
+                  icon="camera"
+                  color={colors.brand[500]}
+                  chevron
+                  onPress={() => router.push("/face-enroll")}
+                />
+              )}
               <InfoRow
                 label="Bantuan"
                 value="Pusat Pengetahuan"

@@ -22,6 +22,7 @@ import {
   type GpsReading,
 } from "@/lib/attendance";
 import { liveClock, dateLabel, timeHMS } from "@/lib/home";
+import { computeFaceEmbedding } from "@/lib/face-embed";
 
 // Menit-dari-tengah-malam (zona ber-offset) dari sebuah ISO; null bila kosong.
 function isoToMinutes(iso: string | null, offsetMin: number): number | null {
@@ -78,6 +79,7 @@ export default function ClockScreen() {
     iso: string | null;
     status: string | null;
     workingHours: number | null;
+    faceMatch: { score: number | null; passed: boolean } | null;
   }>(null);
 
   const action = ctx?.clock?.attendanceStatus === "CLOCKED_IN" ? "out" : "in";
@@ -112,6 +114,9 @@ export default function ClockScreen() {
     try {
       let photoUrl: string | null = null;
       if (ctx.validation?.photo && photoUri) photoUrl = await uploadSelfie(photoUri);
+      // Pencocokan wajah on-device: hitung embedding dari swafoto (bila fitur aktif).
+      let faceEmbedding: number[] | null = null;
+      if (ctx.face?.required && photoUri) faceEmbedding = await computeFaceEmbedding(photoUri);
       const body = {
         latitude: gps?.latitude,
         longitude: gps?.longitude,
@@ -119,13 +124,14 @@ export default function ClockScreen() {
         mocked: gps?.mocked ?? false,
         photoUrl,
         note: note.trim() || null,
+        faceEmbedding,
       };
       if (action === "out") {
         const r = await submitClockOut(body);
-        setDone({ kind: "out", iso: r.clockOut, status: null, workingHours: r.workingHours });
+        setDone({ kind: "out", iso: r.clockOut, status: null, workingHours: r.workingHours, faceMatch: r.faceMatch });
       } else {
         const r = await submitClockIn(body);
-        setDone({ kind: "in", iso: r.clockIn, status: r.status, workingHours: null });
+        setDone({ kind: "in", iso: r.clockIn, status: r.status, workingHours: null, faceMatch: r.faceMatch });
       }
     } catch (e) {
       if (e instanceof AuthError) return router.replace("/login");
@@ -195,7 +201,14 @@ export default function ClockScreen() {
           </View>
 
           {/* Timing relatif shift */}
-          <Pill tone={timing.tone}>{timing.text}</Pill>
+          <Pill tone={timing.tone} style={{ alignSelf: "center" }}>{timing.text}</Pill>
+
+          {/* Hasil pencocokan wajah (bila dijalankan) */}
+          {done.faceMatch ? (
+            <Pill tone={done.faceMatch.passed ? "mint" : "amber"} style={{ alignSelf: "center" }}>
+              {done.faceMatch.passed ? "Wajah cocok" : "Wajah perlu ditinjau HR"}
+            </Pill>
+          ) : null}
 
           {/* Durasi hadir (clock-out) */}
           {workedLabel ? (
@@ -260,7 +273,7 @@ export default function ClockScreen() {
       {step === "location" && (
         <LocationStep ctx={ctx} gps={gps} setGps={setGps} onNext={goNext} />
       )}
-      {step === "face" && <FaceStep photoUri={photoUri} setPhotoUri={setPhotoUri} onNext={goNext} tzOffset={ctx.tzOffsetMinutes} tzAbbr={ctx.tzAbbr} />}
+      {step === "face" && <FaceStep photoUri={photoUri} setPhotoUri={setPhotoUri} onNext={goNext} tzOffset={ctx.tzOffsetMinutes} tzAbbr={ctx.tzAbbr} faceRequired={!!ctx.face?.required} faceEnrolled={!!ctx.face?.enrolled} />}
       {step === "note" && <NoteStep note={note} setNote={setNote} onNext={goNext} />}
       {step === "review" && (
         <ReviewStep
@@ -583,7 +596,7 @@ function StatusBanner({ tone, text, busy }: { tone: "mint" | "rose" | "amber"; t
 
 
 // ── Step: Wajah (swafoto) ──────────────────────────────────────────────────────
-function FaceStep({ photoUri, setPhotoUri, onNext, tzOffset, tzAbbr }: { photoUri: string | null; setPhotoUri: (u: string | null) => void; onNext: () => void; tzOffset: number; tzAbbr: string | null }) {
+function FaceStep({ photoUri, setPhotoUri, onNext, tzOffset, tzAbbr, faceRequired, faceEnrolled }: { photoUri: string | null; setPhotoUri: (u: string | null) => void; onNext: () => void; tzOffset: number; tzAbbr: string | null; faceRequired: boolean; faceEnrolled: boolean }) {
   const [perm, requestPerm] = useCameraPermissions();
   const camRef = useRef<CameraView>(null);
   const [capturing, setCapturing] = useState(false);
@@ -593,6 +606,24 @@ function FaceStep({ photoUri, setPhotoUri, onNext, tzOffset, tzAbbr }: { photoUr
   useEffect(() => {
     if (perm && !perm.granted && perm.canAskAgain) requestPerm();
   }, [perm, requestPerm]);
+
+  // Pencocokan wajah wajib tapi belum daftar → arahkan ke pendaftaran di Profil.
+  if (faceRequired && !faceEnrolled) {
+    return (
+      <Center>
+        <View style={{ width: 72, height: 72, borderRadius: 24, backgroundColor: colors.brand[100], alignItems: "center", justifyContent: "center", marginBottom: 16 }}>
+          <Icon name="camera" size={34} color={colors.brand[500]} strokeWidth={2} />
+        </View>
+        <Txt size={16} weight="bold" color={colors.neutral[900]} style={{ textAlign: "center", marginBottom: 6 }}>
+          Daftarkan wajah dulu
+        </Txt>
+        <Txt size={13} color={colors.neutral[500]} style={{ textAlign: "center", marginBottom: 18 }}>
+          Absensi di perusahaan Anda memakai verifikasi wajah. Daftarkan wajah referensi sekali lewat menu Profil sebelum melanjutkan.
+        </Txt>
+        <Button label="Daftarkan Wajah" size="md" onPress={() => router.push("/face-enroll")} left={<Icon name="camera" size={16} color="#fff" strokeWidth={2} />} />
+      </Center>
+    );
+  }
 
   // Reset stempel waktu bila foto dihapus (Ulangi).
   useEffect(() => {

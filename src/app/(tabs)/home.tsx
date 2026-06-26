@@ -305,7 +305,7 @@ export default function HomeScreen() {
         <View style={{ paddingHorizontal: 16, marginTop: 18 }}>
           <SectionHeader title="Akses Cepat" />
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
-            <QuickAction icon="plane" label="Cuti" tone={colors.brand[500]} bg={colors.brand[100]} badge="8 hari" />
+            <QuickAction icon="plane" label="Cuti" tone={colors.brand[500]} bg={colors.brand[100]} onPress={() => router.push("/cuti")} />
             <QuickAction icon="clock" label="Lembur" tone={colors.amber[700]} bg={colors.amber[100]} />
             <QuickAction icon="receipt" label="Reimburse" tone={colors.mint[700]} bg={colors.mint[100]} badge="2 pending" />
             <QuickAction icon="wallet" label="Slip Gaji" tone={colors.coral[700]} bg={colors.coral[100]} />
@@ -415,7 +415,7 @@ export default function HomeScreen() {
 
         {/* Saldo Cuti */}
         <View style={{ paddingHorizontal: 16, marginTop: 22 }}>
-          <SectionHeader title="Saldo Cuti" action="Ajukan cuti →" />
+          <SectionHeader title="Saldo Cuti" action="Ajukan cuti →" onAction={() => router.push("/cuti/ajukan")} />
           <Card pad={16} radius={20}>
             <View style={{ flexDirection: "row", gap: 14 }}>
               <LeaveDial label="Tahunan" used={4} total={12} color={colors.brand[500]} />
@@ -509,15 +509,17 @@ function QuickAction({
   tone,
   bg,
   badge,
+  onPress,
 }: {
   icon: IconName;
   label: string;
   tone: string;
   bg: string;
   badge?: string;
+  onPress?: () => void;
 }) {
-  return (
-    <Card pad={12} radius={18} style={{ width: "31.5%" }}>
+  const inner = (
+    <Card pad={12} radius={18} style={{ width: "100%" }}>
       <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: bg, alignItems: "center", justifyContent: "center", marginBottom: 8 }}>
         <Icon name={icon} size={20} color={tone} strokeWidth={2} />
       </View>
@@ -530,6 +532,12 @@ function QuickAction({
         </Txt>
       ) : null}
     </Card>
+  );
+  if (!onPress) return <View style={{ width: "31.5%" }}>{inner}</View>;
+  return (
+    <Pressable onPress={onPress} style={({ pressed }) => ({ width: "31.5%", opacity: pressed ? 0.7 : 1 })}>
+      {inner}
+    </Pressable>
   );
 }
 

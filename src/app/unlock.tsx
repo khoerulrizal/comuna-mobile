@@ -1,12 +1,13 @@
 // Buka Kunci — muncul saat app dibuka kembali dengan sesi + PIN tersimpan.
 // PIN diverifikasi ke server (/pin/verify); biometrik → refresh sesi. Lintas iOS/Android.
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Pressable, View } from "react-native";
+import { ActivityIndicator, Pressable, View } from "react-native";
 import { router } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Keypad, PinDots } from "@/components/PinPad";
-import { Avatar, Txt } from "@/components/ui";
+import { Txt } from "@/components/ui";
+import ComunaMark from "@/assets/logo/comuna_logo_primary_transparent.svg";
 import { colors } from "@/theme/tokens";
 import { PIN_LENGTH, verifyPin } from "@/lib/pin";
 import {
@@ -119,7 +120,7 @@ export default function UnlockScreen() {
       <View style={{ flex: 1, justifyContent: "space-between" }}>
         {/* Atas: avatar + sapaan + dots */}
         <View style={{ alignItems: "center", paddingHorizontal: 32, marginTop: 24, gap: 24 }}>
-          <Avatar name="Comuna" size={72} />
+          <ComunaMark width={72} height={72} />
           <View style={{ alignItems: "center", gap: 6 }}>
             <Txt size={22} weight="extrabold" color={colors.neutral[800]}>
               Selamat datang kembali
@@ -129,7 +130,14 @@ export default function UnlockScreen() {
             </Txt>
           </View>
           <PinDots length={PIN_LENGTH} filled={pin.length} error={error} />
-          {message ? (
+          {busy ? (
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+              <ActivityIndicator color={colors.brand[500]} />
+              <Txt size={12.5} weight="semibold" color={colors.neutral[500]}>
+                Memverifikasi…
+              </Txt>
+            </View>
+          ) : message ? (
             <Txt
               size={12.5}
               weight="semibold"
