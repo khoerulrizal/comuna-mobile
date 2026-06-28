@@ -22,8 +22,10 @@
     "expo-local-authentication": "~56.0.4",
     "expo-location": "~56.0.18",
     "expo-maps": "~56.0.7",
+    "expo-print": "~56.0.4",
     "expo-router": "~56.2.11",
     "expo-secure-store": "~56.0.4",
+    "expo-sharing": "~56.0.18",
     "expo-splash-screen": "~56.0.10",
     "expo-status-bar": "~56.0.4",
     "expo-symbols": "~56.0.6",
@@ -39,6 +41,7 @@
     "react-native-safe-area-context": "~5.7.0",
     "react-native-screens": "4.25.2",
     "react-native-svg": "15.15.4",
+    "react-native-view-shot": "5.1.0",
     "react-native-web": "~0.21.0",
     "react-native-worklets": "0.8.3"
   },

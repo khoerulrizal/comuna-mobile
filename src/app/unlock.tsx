@@ -8,8 +8,14 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Keypad, PinDots } from "@/components/PinPad";
 import { Txt } from "@/components/ui";
 import ComunaMark from "@/assets/logo/comuna_logo_primary_transparent.svg";
-import { colors } from "@/theme/tokens";
+import { colors, fonts } from "@/theme/tokens";
 import { PIN_LENGTH, verifyPin } from "@/lib/pin";
+
+/** ms → "MM:SS" (hitung mundur). */
+function fmtCountdown(ms: number): string {
+  const s = Math.max(0, Math.ceil(ms / 1000));
+  return `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
+}
 import {
   authenticate,
   getBiometricType,
@@ -27,6 +33,9 @@ export default function UnlockScreen() {
   const [message, setMessage] = useState<string | null>(null);
   const [bioType, setBioType] = useState<BiometricType>(null);
   const bioTried = useRef(false);
+  // Waktu (epoch ms) sampai PIN bisa dicoba lagi + jam berjalan utk hitung mundur.
+  const [lockUntil, setLockUntil] = useState<number | null>(null);
+  const [nowMs, setNowMs] = useState(() => Date.now());
 
   const unlock = useCallback(() => {
     router.replace("/home");
@@ -61,6 +70,22 @@ export default function UnlockScreen() {
     })();
   }, [doBiometric]);
 
+  // Hitung mundur kunci: tik tiap detik; saat habis → buka keypad lagi.
+  useEffect(() => {
+    if (lockUntil == null) return;
+    const id = setInterval(() => {
+      const t = Date.now();
+      setNowMs(t);
+      if (t >= lockUntil) {
+        setLocked(false);
+        setLockUntil(null);
+        setMessage(null);
+        clearInterval(id);
+      }
+    }, 1000);
+    return () => clearInterval(id);
+  }, [lockUntil]);
+
   async function commit(candidate: string) {
     setBusy(true);
     const res = await verifyPin(candidate);
@@ -80,11 +105,13 @@ export default function UnlockScreen() {
       return;
     }
     if (res.locked) {
-      const mins = res.retryAfter ? Math.ceil(res.retryAfter / 60) : 15;
+      const secs = res.retryAfter && res.retryAfter > 0 ? res.retryAfter : 15 * 60;
       setLocked(true);
       setError(true);
       setPin("");
-      setMessage(`PIN terkunci ±${mins} menit. Coba lagi nanti atau reset PIN.`);
+      setMessage(null);
+      setNowMs(Date.now());
+      setLockUntil(Date.now() + secs * 1000);
       setTimeout(() => setError(false), 600);
       return;
     }
@@ -137,11 +164,23 @@ export default function UnlockScreen() {
                 Memverifikasi…
               </Txt>
             </View>
+          ) : locked && lockUntil ? (
+            <View style={{ alignItems: "center", gap: 3 }}>
+              <Txt size={12.5} weight="semibold" color={colors.amber[700]}>
+                PIN terkunci sementara
+              </Txt>
+              <Txt size={30} weight="extrabold" color={colors.amber[700]} style={{ fontFamily: fonts.mono, letterSpacing: 1 }}>
+                {fmtCountdown(lockUntil - nowMs)}
+              </Txt>
+              <Txt size={11.5} color={colors.neutral[500]} style={{ textAlign: "center" }}>
+                Coba lagi setelah hitung mundur selesai, atau reset PIN.
+              </Txt>
+            </View>
           ) : message ? (
             <Txt
               size={12.5}
               weight="semibold"
-              color={locked ? colors.amber[700] : colors.rose[700]}
+              color={colors.rose[700]}
               style={{ textAlign: "center" }}
             >
               {message}

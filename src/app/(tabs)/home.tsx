@@ -1,6 +1,6 @@
 // Home (karyawan) — ported from the design's screens-home.jsx (Corelia HRIS Mobile).
 import React, { useCallback, useEffect, useState } from "react";
-import { Image, Modal, Pressable, ScrollView, View } from "react-native";
+import { ActivityIndicator, Image, Modal, Pressable, RefreshControl, ScrollView, View } from "react-native";
 import { router, useFocusEffect } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
@@ -24,6 +24,7 @@ export default function HomeScreen() {
   const [home, setHome] = useState<Home | null>(null);
   const [offModal, setOffModal] = useState(false);
   const [nowMs, setNowMs] = useState(() => Date.now());
+  const [refreshing, setRefreshing] = useState(false);
 
   // Jam berjalan: tick tiap detik untuk clock live di card.
   useEffect(() => {
@@ -31,23 +32,28 @@ export default function HomeScreen() {
     return () => clearInterval(t);
   }, []);
 
+  const load = useCallback(async () => {
+    try {
+      setHome(await getHome());
+    } catch (e) {
+      if (e instanceof AuthError) router.replace("/login");
+      // selain itu: biarkan tampilan fallback — Home tetap berguna.
+    }
+  }, []);
+
   useFocusEffect(
     useCallback(() => {
       let active = true;
-      (async () => {
-        try {
-          const h = await getHome();
-          if (active) setHome(h);
-        } catch (e) {
-          if (e instanceof AuthError) router.replace("/login");
-          // selain itu: biarkan tampilan fallback (mock) — Home tetap berguna.
-        }
-      })();
-      return () => {
-        active = false;
-      };
-    }, []),
+      (async () => { if (active) await load(); })();
+      return () => { active = false; };
+    }, [load]),
   );
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await load();
+    setRefreshing(false);
+  }, [load]);
 
   const loaded = home != null;
   const profile = home?.profile;
@@ -110,6 +116,7 @@ export default function HomeScreen() {
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 24 }}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.brand[500]} colors={[colors.brand[500]]} />}
       >
         {/* Hero header — brand gradient */}
         <LinearGradient
@@ -298,6 +305,13 @@ export default function HomeScreen() {
               <MiniStat label="Target" value={targetLabel} color={colors.neutral[600]} />
               <MiniStat label="Selesai" value={selesaiLabel} color={colors.neutral[600]} />
             </View>
+            {/* Overlay loading saat pertama masuk (data clock belum dimuat). */}
+            {!loaded && !refreshing ? (
+              <View style={{ position: "absolute", left: 0, top: 0, right: 0, bottom: 0, borderRadius: 22, backgroundColor: "rgba(255,255,255,0.72)", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                <ActivityIndicator color={colors.brand[500]} />
+                <Txt size={11.5} weight="semibold" color={colors.neutral[500]}>Memuat kehadiran…</Txt>
+              </View>
+            ) : null}
           </Card>
         </View>
 
@@ -306,9 +320,9 @@ export default function HomeScreen() {
           <SectionHeader title="Akses Cepat" />
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
             <QuickAction icon="plane" label="Cuti" tone={colors.brand[500]} bg={colors.brand[100]} onPress={() => router.push("/cuti")} />
-            <QuickAction icon="clock" label="Lembur" tone={colors.amber[700]} bg={colors.amber[100]} />
-            <QuickAction icon="receipt" label="Reimburse" tone={colors.mint[700]} bg={colors.mint[100]} badge="2 pending" />
-            <QuickAction icon="wallet" label="Slip Gaji" tone={colors.coral[700]} bg={colors.coral[100]} />
+            <QuickAction icon="clock" label="Lembur" tone={colors.amber[700]} bg={colors.amber[100]} onPress={() => router.push("/lembur")} />
+            <QuickAction icon="receipt" label="Reimburse" tone={colors.mint[700]} bg={colors.mint[100]} onPress={() => router.push("/reimburse")} />
+            <QuickAction icon="wallet" label="Slip Gaji" tone={colors.coral[700]} bg={colors.coral[100]} onPress={() => router.push("/slip-gaji")} />
             <QuickAction icon="calendar" label="Kalender" tone={colors.neutral[700]} bg={colors.neutral[100]} />
             <QuickAction icon="money" label="Pinjaman" tone={colors.neutral[700]} bg={colors.neutral[100]} />
           </View>

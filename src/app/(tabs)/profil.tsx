@@ -1,7 +1,7 @@
 // Profil — desain "Corelia HRIS Mobile" (ProfileScreen), data nyata dari API aman.
 // Cover gradient + stats mengambang + Informasi Pribadi/Pekerjaan/Pengaturan.
 import { useCallback, useState } from "react";
-import { ActivityIndicator, Image, Linking, Pressable, ScrollView, Switch, View } from "react-native";
+import { ActivityIndicator, Image, Linking, Pressable, RefreshControl, ScrollView, Switch, View } from "react-native";
 import { router, useFocusEffect } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
@@ -28,6 +28,7 @@ export default function ProfilScreen() {
   const insets = useSafeAreaInsets();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const [bioType, setBioType] = useState<BiometricType>(null);
@@ -77,6 +78,12 @@ export default function ProfilScreen() {
       };
     }, [load]),
   );
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await load();
+    setRefreshing(false);
+  }, [load]);
 
   const label = biometricLabel(bioType);
 
@@ -154,6 +161,7 @@ export default function ProfilScreen() {
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: insets.bottom + 28 }}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.brand[500]} colors={[colors.brand[500]]} />}
       >
         {/* Cover + avatar */}
         <LinearGradient

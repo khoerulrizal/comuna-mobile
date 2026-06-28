@@ -21,6 +21,39 @@ export interface LeavePolicyOption {
   attachmentRequired: boolean;
   maxRequestDays: number | null;
   minRequestDaysAhead: number;
+  defaultDays: number;
+  policyType: string; // ANNUALLY | ANNIVERSARY | MONTHLY
+  remaining: number | null; // sisa kuota (ANNUAL) — null utk kebijakan per-kejadian
+  minWorkingMonths: number;
+}
+
+/** Subjudul ringkas kebijakan: maks per pengajuan, masa kerja, lampiran, tanpa-upah. */
+export function policySubtitle(p: LeavePolicyOption): string {
+  const parts: string[] = [];
+  if (p.maxRequestDays != null) parts.push(`maks ${p.maxRequestDays} hari`);
+  else if (!p.isUnlimited) parts.push(`maks ${p.defaultDays} hari`);
+  if (p.minWorkingMonths > 0) parts.push(`min ${p.minWorkingMonths} bln kerja`);
+  if (p.attachmentRequired) parts.push("perlu lampiran");
+  if (!p.isPaid) parts.push("tanpa upah");
+  return parts.join(" · ");
+}
+
+/** Batas hari per 1 pengajuan = gabungan maxRequestDays & kuota. null = tanpa batas. */
+export function effectiveMaxDays(p: LeavePolicyOption): number | null {
+  const caps: number[] = [];
+  if (p.maxRequestDays != null) caps.push(p.maxRequestDays);
+  if (!p.isUnlimited) caps.push(p.remaining != null ? p.remaining : p.defaultDays);
+  return caps.length ? Math.min(...caps) : null;
+}
+
+/** Label periode kuota kebijakan. */
+export function leavePeriodLabel(t: string): string {
+  switch (t) {
+    case "ANNUALLY": return "per tahun";
+    case "MONTHLY": return "per bulan";
+    case "ANNIVERSARY": return "per masa kerja";
+    default: return "";
+  }
 }
 
 export interface LeaveAnnual {
@@ -59,11 +92,19 @@ export interface LeaveApprovalEntry {
   decidedAt: string | null;
 }
 
+export interface LeaveStatusLogEntry {
+  status: LeaveStatus;
+  note: string | null;
+  changedByName: string | null;
+  changedAt: string | null;
+}
+
 export interface LeaveRequestDetail extends LeaveRequestRow {
   halfDaySession: string | null;
   attachmentUrl: string | null;
   rejectionNote: string | null;
   approvals: LeaveApprovalEntry[];
+  statusLogs: LeaveStatusLogEntry[];
 }
 
 export interface LeaveSubmitBody {
@@ -134,6 +175,17 @@ export function formatLeaveDate(iso: string | null): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "-";
   return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
+}
+
+const MONTHS_SHORT = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];
+
+/** "26 Jun 2026 · 22:09" dari timestamp (waktu lokal perangkat). */
+export function leaveDateTimeLabel(iso: string | null): string {
+  if (!iso) return "-";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "-";
+  const base = `${d.getDate()} ${MONTHS_SHORT[d.getMonth()]} ${d.getFullYear()}`;
+  return `${base} · ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
 
 /** "12 – 14 Jun 2026" / "12 Jun 2026" bila satu hari. */

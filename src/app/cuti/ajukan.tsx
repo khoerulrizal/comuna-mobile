@@ -1,5 +1,5 @@
 // Ajukan Cuti — hero saldo + form (jenis/tanggal/half-day/alasan/lampiran) + alur. Ikut desain.
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Alert, Image, Modal, Pressable, ScrollView, Switch, TextInput, View } from "react-native";
 import { router, useFocusEffect } from "expo-router";
 import { StatusBar } from "expo-status-bar";
@@ -11,6 +11,7 @@ import { colors, fonts, radii } from "@/theme/tokens";
 import { AuthError, ApiError } from "@/lib/api";
 import {
   getLeaveContext, submitLeaveRequest, uploadLeaveAttachment, toYMD, leaveCategoryVisual,
+  effectiveMaxDays, leavePeriodLabel, policySubtitle,
   type LeaveAnnual, type LeavePolicyOption,
 } from "@/lib/leave";
 
@@ -53,9 +54,17 @@ export default function AjukanCutiScreen() {
 
   const policy = useMemo(() => policies.find((p) => p.id === policyId) ?? null, [policies, policyId]);
   const minStart = useMemo(() => addDays(new Date(), policy?.minRequestDaysAhead ?? 0), [policy]);
+  // Setengah hari hanya berlaku bila rentang 1 hari (mulai = selesai).
+  const singleDay = !!start && !!end && toYMD(start) === toYMD(end);
+  useEffect(() => { if (isHalfDay && !singleDay) setIsHalfDay(false); }, [isHalfDay, singleDay]);
+
   const totalDays = isHalfDay ? 0.5 : start && end ? daysInclusive(start, end) : 0;
-  const overMax = policy?.maxRequestDays != null && totalDays > policy.maxRequestDays;
-  const valid = !!policyId && !!start && (isHalfDay || !!end) && reason.trim().length >= 3 && !(policy?.attachmentRequired && !attachmentUri) && !overMax;
+  const capDays = policy ? effectiveMaxDays(policy) : null; // batas hari per pengajuan (maks/kuota)
+  const overCap = capDays != null && totalDays > capDays;
+  const noQuota = !!policy && !policy.isUnlimited && policy.remaining != null && policy.remaining <= 0;
+  const valid =
+    !!policyId && !!start && (isHalfDay || !!end) && reason.trim().length >= 3 &&
+    !(policy?.attachmentRequired && !attachmentUri) && !overCap && !noQuota;
 
   function selectPolicy(p: LeavePolicyOption) { setPolicyId(p.id); if (!p.allowHalfDay) setIsHalfDay(false); setShowPolicy(false); }
 
@@ -143,12 +152,13 @@ export default function AjukanCutiScreen() {
             <Sh title="Detail Cuti" />
             <Card pad={0} radius={18}>
               <FormRow label="Jenis" value={policy?.name ?? "Pilih jenis cuti"}
-                sub={policy ? `${policy.isPaid ? "Berbayar" : "Tanpa upah"}${policy.maxRequestDays != null ? ` · maks ${policy.maxRequestDays} hari` : ""}` : undefined}
+                sub={policy ? (policySubtitle(policy) || undefined) : undefined}
                 icon={policy ? (leaveCategoryVisual(policy.category).icon) : "plane"} color={colors.brand[500]} onPress={() => setShowPolicy(true)} />
               <Divider />
-              <FormRow label={isHalfDay ? "Tanggal" : "Mulai"} value={fmt(start)} icon="calendar" color={colors.mint[500]} onPress={() => setShowStart(true)} />
-              {!isHalfDay ? (<><Divider /><FormRow label="Selesai" value={fmt(end)} icon="calendar" color={colors.mint[500]} onPress={() => start && setShowEnd(true)} dim={!start} /></>) : null}
-              {policy?.allowHalfDay ? (
+              <FormRow label="Mulai" value={fmt(start)} icon="calendar" color={colors.mint[500]} onPress={() => setShowStart(true)} />
+              <Divider />
+              <FormRow label="Selesai" value={fmt(end)} icon="calendar" color={colors.mint[500]} onPress={() => start && setShowEnd(true)} dim={!start} />
+              {policy?.allowHalfDay && singleDay ? (
                 <><Divider />
                   <View style={{ paddingHorizontal: 14, paddingVertical: 12, flexDirection: "row", alignItems: "center" }}>
                     <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: colors.amber[100], alignItems: "center", justifyContent: "center" }}><Icon name="clock" size={16} color={colors.amber[700]} /></View>
@@ -166,9 +176,28 @@ export default function AjukanCutiScreen() {
                 </>
               ) : null}
             </Card>
+            {/* Info aturan kebijakan terpilih */}
+            {policy ? (
+              <View style={{ marginTop: 8, padding: 12, borderRadius: 14, backgroundColor: colors.brand[50] }}>
+                <Txt size={10.5} weight="extrabold" color={colors.brand[700]} style={{ letterSpacing: 0.3 }}>ATURAN KEBIJAKAN</Txt>
+                <View style={{ marginTop: 6, gap: 4 }}>
+                  {policy.isUnlimited ? (
+                    <RuleLine icon="check" text="Tanpa batas kuota" />
+                  ) : policy.remaining != null ? (
+                    <RuleLine icon="calendar" text={`Sisa kuota ${policy.remaining} hari (${leavePeriodLabel(policy.policyType)})`} warn={policy.remaining <= 0} />
+                  ) : (
+                    <RuleLine icon="calendar" text={`Jatah ${policy.defaultDays} hari ${leavePeriodLabel(policy.policyType)}`} />
+                  )}
+                  {policy.maxRequestDays != null ? <RuleLine icon="clock" text={`Maksimal ${policy.maxRequestDays} hari per pengajuan`} /> : null}
+                  {policy.minRequestDaysAhead > 0 ? <RuleLine icon="info" text={`Ajukan minimal H-${policy.minRequestDaysAhead}`} /> : null}
+                  {policy.attachmentRequired ? <RuleLine icon="upload" text="Wajib melampirkan dokumen" /> : null}
+                </View>
+              </View>
+            ) : null}
             {totalDays > 0 ? (
-              <Txt size={12} weight="semibold" color={overMax ? colors.rose[700] : colors.neutral[500]} style={{ marginTop: 8 }}>
-                Total {isHalfDay ? "0,5" : totalDays} hari{overMax ? ` · melebihi maks ${policy?.maxRequestDays} hari` : ""}
+              <Txt size={12} weight="semibold" color={overCap || noQuota ? colors.rose[700] : colors.neutral[600]} style={{ marginTop: 8 }}>
+                Total {isHalfDay ? "0,5" : totalDays} hari
+                {noQuota ? " · kuota habis" : overCap ? ` · melebihi batas ${capDays} hari` : ""}
               </Txt>
             ) : null}
 
@@ -241,7 +270,7 @@ export default function AjukanCutiScreen() {
                     <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: v.bg, alignItems: "center", justifyContent: "center" }}><Icon name={v.icon as never} size={16} color={v.color} /></View>
                     <View style={{ flex: 1 }}>
                       <Txt size={14} weight="semibold" color={colors.neutral[800]}>{p.name}</Txt>
-                      <Txt size={11} color={colors.neutral[500]} style={{ marginTop: 1 }}>{p.isPaid ? "Berbayar" : "Tanpa upah"}{p.attachmentRequired ? " · perlu lampiran" : ""}{p.allowHalfDay ? " · bisa ½ hari" : ""}</Txt>
+                      {policySubtitle(p) ? <Txt size={11} color={colors.neutral[500]} style={{ marginTop: 1 }}>{policySubtitle(p)}</Txt> : null}
                     </View>
                     {p.id === policyId ? <Icon name="check" size={18} color={colors.brand[500]} strokeWidth={2.4} /> : null}
                   </Pressable>
@@ -262,6 +291,14 @@ function Sh({ title }: { title: string }) {
   return <Txt size={12.5} weight="extrabold" color={colors.neutral[700]} style={{ marginTop: 16, marginBottom: 8, letterSpacing: 0.2 }}>{title}</Txt>;
 }
 function Divider() { return <View style={{ height: 1, backgroundColor: colors.neutral[100], marginLeft: 62 }} />; }
+function RuleLine({ icon, text, warn }: { icon: string; text: string; warn?: boolean }) {
+  return (
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+      <Icon name={icon as never} size={13} color={warn ? colors.rose[500] : colors.brand[600]} />
+      <Txt size={11.5} color={warn ? colors.rose[700] : colors.neutral[600]} style={{ flex: 1 }}>{text}</Txt>
+    </View>
+  );
+}
 function FormRow({ label, value, sub, icon, color, onPress, dim }: { label: string; value: string; sub?: string; icon: string; color: string; onPress?: () => void; dim?: boolean }) {
   return (
     <Pressable onPress={onPress} style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 14, paddingVertical: 12 }}>

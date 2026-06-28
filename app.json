@@ -77,7 +77,8 @@
           "photosPermission": "Comuna memerlukan akses galeri untuk melampirkan dokumen pengajuan cuti.",
           "cameraPermission": "Comuna memerlukan kamera untuk memfoto lampiran pengajuan cuti."
         }
-      ]
+      ],
+      "expo-sharing"
     ],
     "experiments": {
       "typedRoutes": true,
