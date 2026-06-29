@@ -18,6 +18,7 @@ type Filter = "ALL" | "PENDING" | "APPROVED" | "REJECTED";
 export default function CutiListScreen() {
   const insets = useSafeAreaInsets();
   const [annual, setAnnual] = useState<LeaveAnnual | null>(null);
+  const [year, setYear] = useState<number | null>(null);
   const [rows, setRows] = useState<LeaveRequestRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -29,6 +30,7 @@ export default function CutiListScreen() {
       setError(null);
       const [ctx, list] = await Promise.all([getLeaveContext(), getLeaveRequests()]);
       setAnnual(ctx.annual);
+      setYear(ctx.year);
       setRows(list.requests);
     } catch (e) {
       if (e instanceof AuthError) { router.replace("/login"); return; }
@@ -62,7 +64,10 @@ export default function CutiListScreen() {
         <Pressable onPress={() => router.back()} hitSlop={10} style={boxBtn}>
           <Icon name="chevronLeft" size={18} color={colors.neutral[700]} strokeWidth={2.2} />
         </Pressable>
-        <Txt size={15} weight="extrabold" color={colors.neutral[900]}>Cuti Saya</Txt>
+        <View style={{ alignItems: "center" }}>
+          <Txt size={15} weight="extrabold" color={colors.neutral[900]}>Cuti Saya</Txt>
+          {year ? <Txt size={11} weight="semibold" color={colors.neutral[400]}>Tahun {year}</Txt> : null}
+        </View>
         <View style={{ width: 38 }} />
       </View>
 
@@ -80,7 +85,7 @@ export default function CutiListScreen() {
               {/* Saldo hero */}
               {annual ? (
                 <LinearGradient colors={[colors.brand[700], colors.brand[500]]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ borderRadius: 22, padding: 18 }}>
-                  <Txt size={11} weight="bold" color="rgba(255,255,255,0.85)" style={{ letterSpacing: 0.4 }}>SALDO {annual.name.toUpperCase()}</Txt>
+                  <Txt size={11} weight="bold" color="rgba(255,255,255,0.85)" style={{ letterSpacing: 0.4 }}>SALDO {annual.name.toUpperCase()}{year ? ` · ${year}` : ""}</Txt>
                   <View style={{ flexDirection: "row", alignItems: "baseline", gap: 6, marginTop: 4 }}>
                     <Txt size={36} weight="extrabold" color="#fff" style={{ fontFamily: fonts.extrabold }}>{annual.remaining}</Txt>
                     <Txt size={14} weight="semibold" color="rgba(255,255,255,0.85)">/ {annual.total} hari tersisa</Txt>
@@ -94,6 +99,20 @@ export default function CutiListScreen() {
                   </View>
                 </LinearGradient>
               ) : null}
+
+              {/* Jenis Cuti & Kuota */}
+              <Pressable onPress={() => router.push("/cuti/kebijakan")} style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1, marginTop: 12 })}>
+                <Card pad={14} radius={16} style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+                  <View style={{ width: 38, height: 38, borderRadius: 11, backgroundColor: colors.brand[100], alignItems: "center", justifyContent: "center" }}>
+                    <Icon name="doc" size={18} color={colors.brand[600]} strokeWidth={2} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Txt size={13.5} weight="extrabold" color={colors.neutral[900]}>Jenis Cuti & Kuota</Txt>
+                    <Txt size={11.5} color={colors.neutral[500]} style={{ marginTop: 1 }}>Lihat kebijakan, kuota & sisa per periode</Txt>
+                  </View>
+                  <Icon name="chevronRight" size={16} color={colors.neutral[300]} />
+                </Card>
+              </Pressable>
 
               {/* Filter chips */}
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, paddingVertical: 14 }}>

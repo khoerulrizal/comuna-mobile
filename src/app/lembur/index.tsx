@@ -19,6 +19,7 @@ const MONTHS = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", 
 export default function LemburListScreen() {
   const insets = useSafeAreaInsets();
   const [summary, setSummary] = useState<OvertimeSummary | null>(null);
+  const [tzAbbr, setTzAbbr] = useState<string | null>(null);
   const [rows, setRows] = useState<OvertimeRequestRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -30,6 +31,7 @@ export default function LemburListScreen() {
       setError(null);
       const [ctx, list] = await Promise.all([getOvertimeContext(), getOvertimeRequests()]);
       setSummary(ctx.summary);
+      setTzAbbr(ctx.tzAbbr);
       setRows(list.requests);
     } catch (e) {
       if (e instanceof AuthError) { router.replace("/login"); return; }
@@ -118,7 +120,7 @@ export default function LemburListScreen() {
                   <Txt size={12.5} color={colors.neutral[500]} style={{ textAlign: "center" }}>Ajukan lembur untuk pekerjaan di luar jam kerja.</Txt>
                 </View>
               ) : (
-                <View style={{ gap: 10 }}>{filtered.map((r) => <RequestCard key={r.id} r={r} />)}</View>
+                <View style={{ gap: 10 }}>{filtered.map((r) => <RequestCard key={r.id} r={r} tzAbbr={tzAbbr} />)}</View>
               )}
             </>
           )}
@@ -144,7 +146,7 @@ function compLabel(r: OvertimeRequestRow): string | null {
   return null;
 }
 
-function RequestCard({ r }: { r: OvertimeRequestRow }) {
+function RequestCard({ r, tzAbbr }: { r: OvertimeRequestRow; tzAbbr: string | null }) {
   const pill = overtimeStatusPill(r.status);
   const steps = Math.max(r.totalSteps, 1);
   const comp = compLabel(r);
@@ -162,7 +164,7 @@ function RequestCard({ r }: { r: OvertimeRequestRow }) {
                 <Txt size={9.5} weight="extrabold" color={pill.fg} style={{ letterSpacing: 0.3 }}>{pill.label.toUpperCase()}</Txt>
               </View>
             </View>
-            <Txt size={12} weight="semibold" color={colors.neutral[700]} style={{ marginTop: 2 }}>{r.startTime} – {r.endTime} · {hoursLabel(r.totalHours)}</Txt>
+            <Txt size={12} weight="semibold" color={colors.neutral[700]} style={{ marginTop: 2 }}>{r.startTime} – {r.endTime}{tzAbbr ? ` ${tzAbbr}` : ""} · {hoursLabel(r.totalHours)}</Txt>
             {comp ? (
               <Txt size={11.5} color={colors.mint[700]} style={{ marginTop: 1 }} weight="bold">{comp}</Txt>
             ) : null}

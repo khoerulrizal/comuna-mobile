@@ -64,6 +64,7 @@ export interface LeaveAnnual {
 }
 
 export interface LeaveContext {
+  year: number;
   annual: LeaveAnnual | null;
   policies: LeavePolicyOption[];
 }
@@ -115,6 +116,45 @@ export interface LeaveSubmitBody {
   halfDaySession?: string | null;
   reason: string;
   attachmentUrl?: string | null;
+}
+
+// ── Kebijakan cuti (detail + kuota & pemakaian per periode) ───────────────────
+export interface LeavePolicyDetail {
+  id: string;
+  name: string;
+  category: string;
+  description: string | null;
+  legalBasis: string | null;
+  policyType: string; // ANNUALLY | ANNIVERSARY | MONTHLY
+  isPaid: boolean;
+  isUnlimited: boolean;
+  allowHalfDay: boolean;
+  halfDayHours: number | null;
+  attachmentRequired: boolean;
+  allowLeaveDebt: boolean;
+  defaultDays: number;
+  maxRequestDays: number | null;
+  minRequestDaysAhead: number;
+  minWorkingMonths: number;
+  carryForwardType: string;
+  carryForwardMaxDays: number | null;
+  carryForwardExpireMonths: number | null;
+  autoApproveAfterDays: number | null;
+  quota: number | null; // null = tanpa batas
+  used: number;
+  pending: number;
+  remaining: number | null;
+  periodLabel: string; // "Tahun 2026" / "Juni 2026"
+  quotaPeriodLabel: string; // "per tahun" / "per bulan" / "per masa kerja"
+}
+
+export interface LeavePoliciesResponse {
+  year: number;
+  policies: LeavePolicyDetail[];
+}
+
+export function getLeavePolicies() {
+  return api<LeavePoliciesResponse>("/api/v1/leave/policies", { auth: true });
 }
 
 // ── API ──────────────────────────────────────────────────────────────────────
@@ -242,6 +282,17 @@ export function leaveCategoryVisual(category: string): { icon: string; color: st
     default:
       return { icon: "calendar", color: colors.brand[600], bg: colors.brand[100] };
   }
+}
+
+const CATEGORY_LABELS: Record<string, string> = {
+  ANNUAL: "Tahunan", LONG_SERVICE: "Masa Kerja Panjang", SICK: "Sakit",
+  MENSTRUAL: "Haid", MATERNITY: "Melahirkan", MISCARRIAGE: "Keguguran",
+  PATERNITY: "Pendamping", MARRIAGE: "Menikah", CHILD_MARRIAGE: "Menikahkan Anak",
+  CIRCUMCISION: "Khitan Anak", BAPTISM: "Baptis Anak", BEREAVEMENT: "Duka Cita",
+  HAJJ: "Haji", UMROH: "Umroh", UNPAID: "Tanpa Upah", CUSTOM: "Lainnya",
+};
+export function leaveCategoryLabel(category: string): string {
+  return CATEGORY_LABELS[category] ?? "Lainnya";
 }
 
 /** Pasangan warna pill status (bg/fg) + label — ikut desain. */

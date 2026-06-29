@@ -4,9 +4,8 @@ import { ActivityIndicator, Image, Modal, Pressable, RefreshControl, ScrollView,
 import { router, useFocusEffect } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
-import Svg, { Circle, Text as SvgText } from "react-native-svg";
 import { Avatar, Card, Icon, type IconName, Pill, SectionHeader, Txt } from "@/components/ui";
-import { colors, fonts, radii, shadows } from "@/theme/tokens";
+import { colors, radii, shadows } from "@/theme/tokens";
 import { me, review } from "@/data/mock";
 import { AuthError } from "@/lib/api";
 import {
@@ -18,10 +17,22 @@ import {
   timeHMS,
   type Home,
 } from "@/lib/home";
+import { getAttendanceStats, type AttendanceStats } from "@/lib/attendance-calendar";
+import { announcementShortDate, categoryTint, getAnnouncements, type AnnouncementListItem } from "@/lib/announcements";
+import { CachedImage } from "@/components/CachedImage";
+
+/** Menit → "162j" / "162j 30m" untuk label jam kerja kartu Home. */
+function jamLabel(min: number): string {
+  const h = Math.floor(min / 60);
+  const m = Math.round(min % 60);
+  return m > 0 ? `${h}j ${m}m` : `${h}j`;
+}
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const [home, setHome] = useState<Home | null>(null);
+  const [stats, setStats] = useState<AttendanceStats | null>(null);
+  const [announcements, setAnnouncements] = useState<AnnouncementListItem[]>([]);
   const [offModal, setOffModal] = useState(false);
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [refreshing, setRefreshing] = useState(false);
@@ -34,7 +45,14 @@ export default function HomeScreen() {
 
   const load = useCallback(async () => {
     try {
-      setHome(await getHome());
+      const [h, s, ann] = await Promise.all([
+        getHome(),
+        getAttendanceStats().catch(() => null),
+        getAnnouncements(8).catch(() => null),
+      ]);
+      setHome(h);
+      if (s) setStats(s);
+      if (ann) setAnnouncements(ann.announcements);
     } catch (e) {
       if (e instanceof AuthError) router.replace("/login");
       // selain itu: biarkan tampilan fallback — Home tetap berguna.
@@ -238,7 +256,7 @@ export default function HomeScreen() {
                       </Pill>
                       {clockInHMS ? (
                         <Txt size={11.5} color={colors.neutral[500]}>
-                          · {clockInHMS}
+                          · {clockInHMS}{tzAbbr ? ` ${tzAbbr}` : ""}
                         </Txt>
                       ) : null}
                     </>
@@ -252,7 +270,7 @@ export default function HomeScreen() {
                       </Pill>
                       {clockInHMS ? (
                         <Txt size={11.5} color={colors.neutral[500]}>
-                          · {clockInHMS}
+                          · {clockInHMS}{tzAbbr ? ` ${tzAbbr}` : ""}
                         </Txt>
                       ) : null}
                     </>
@@ -303,7 +321,7 @@ export default function HomeScreen() {
             >
               <MiniStat label="Jam Kerja" value={jamKerja} color={colors.brand[600]} />
               <MiniStat label="Target" value={targetLabel} color={colors.neutral[600]} />
-              <MiniStat label="Selesai" value={selesaiLabel} color={colors.neutral[600]} />
+              <MiniStat label="Selesai" value={clockOutHMS ? `${selesaiLabel}${tzAbbr ? ` ${tzAbbr}` : ""}` : selesaiLabel} color={colors.neutral[600]} />
             </View>
             {/* Overlay loading saat pertama masuk (data clock belum dimuat). */}
             {!loaded && !refreshing ? (
@@ -321,10 +339,13 @@ export default function HomeScreen() {
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
             <QuickAction icon="plane" label="Cuti" tone={colors.brand[500]} bg={colors.brand[100]} onPress={() => router.push("/cuti")} />
             <QuickAction icon="clock" label="Lembur" tone={colors.amber[700]} bg={colors.amber[100]} onPress={() => router.push("/lembur")} />
+            <QuickAction icon="fingerprint" label="Kehadiran" tone={colors.mint[700]} bg={colors.mint[100]} onPress={() => router.push("/kehadiran")} />
+            <QuickAction icon="briefcase" label="Shift Saya" tone={colors.brand[500]} bg={colors.brand[100]} onPress={() => router.push("/shift")} />
             <QuickAction icon="receipt" label="Reimburse" tone={colors.mint[700]} bg={colors.mint[100]} onPress={() => router.push("/reimburse")} />
             <QuickAction icon="wallet" label="Slip Gaji" tone={colors.coral[700]} bg={colors.coral[100]} onPress={() => router.push("/slip-gaji")} />
-            <QuickAction icon="calendar" label="Kalender" tone={colors.neutral[700]} bg={colors.neutral[100]} />
-            <QuickAction icon="money" label="Pinjaman" tone={colors.neutral[700]} bg={colors.neutral[100]} />
+            <QuickAction icon="star" label="Bonus" tone={colors.amber[700]} bg={colors.amber[100]} onPress={() => router.push("/bonus")} />
+            <QuickAction icon="calendar" label="Kalender" tone={colors.brand[600]} bg={colors.brand[100]} onPress={() => router.push("/kalender")} />
+            <QuickAction icon="money" label="Pinjaman" tone={colors.mint[700]} bg={colors.mint[100]} onPress={() => router.push("/pinjaman")} />
           </View>
         </View>
 
@@ -374,13 +395,13 @@ export default function HomeScreen() {
 
         {/* Month stats */}
         <View style={{ paddingHorizontal: 16, marginTop: 22 }}>
-          <SectionHeader title="Bulan ini · April 2026" action="Lihat semua" />
+          <SectionHeader title={`Bulan ini${stats ? ` · ${stats.monthLabel}` : ""}`} action="Lihat semua" onAction={() => router.push("/kehadiran")} />
           <Card pad={0} radius={22}>
             <View style={{ flexDirection: "row" }}>
-              <StatCell n={18} label="Hadir" color={colors.mint[500]} />
-              <StatCell n={2} label="Terlambat" color={colors.amber[500]} border />
-              <StatCell n={1} label="Cuti" color={colors.brand[500]} border />
-              <StatCell n={0} label="Absen" color={colors.rose[500]} border />
+              <StatCell n={stats?.present ?? 0} label="Hadir" color={colors.mint[500]} />
+              <StatCell n={stats?.late ?? 0} label="Terlambat" color={colors.amber[500]} border />
+              <StatCell n={stats?.leave ?? 0} label="Cuti" color={colors.brand[500]} border />
+              <StatCell n={stats?.absent ?? 0} label="Absen" color={colors.rose[500]} border />
             </View>
             <View style={{ paddingHorizontal: 16, paddingBottom: 16 }}>
               <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 8 }}>
@@ -389,9 +410,9 @@ export default function HomeScreen() {
                 </Txt>
                 <Txt size={12} weight="semibold" color={colors.neutral[600]}>
                   <Txt size={12} weight="bold" color={colors.neutral[800]}>
-                    162j
+                    {jamLabel(stats?.workMinutes ?? 0)}
                   </Txt>{" "}
-                  / 176j
+                  / {jamLabel(stats?.targetMinutes ?? 0)}
                 </Txt>
               </View>
               <View style={{ height: 8, borderRadius: 4, backgroundColor: colors.neutral[100], overflow: "hidden" }}>
@@ -399,44 +420,30 @@ export default function HomeScreen() {
                   colors={[colors.brand[500], colors.brand[400]]}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
-                  style={{ height: "100%", width: "92%", borderRadius: 4 }}
+                  style={{ height: "100%", width: `${Math.round((stats?.progress ?? 0) * 100)}%`, borderRadius: 4 }}
                 />
               </View>
             </View>
           </Card>
         </View>
 
-        {/* Pengumuman — horizontal carousel */}
-        <View style={{ marginTop: 22 }}>
-          <View style={{ paddingHorizontal: 16 }}>
-            <SectionHeader title="Pengumuman" action="Lihat semua" />
-          </View>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ paddingHorizontal: 16, gap: 12, paddingBottom: 4 }}
-          >
-            <AnnouncementCard
-              title="Town Hall Q2 2026"
-              body="All hands meeting Jumat 25 April, 14:00 WIB di ruang Garuda lt. 23. Kehadiran wajib."
-              tag="Acara"
-              date="25 Apr"
-            />
-            <MiniAnnouncement title="THR Lebaran cair 5 Mei" body="THR akan ditransfer ke rekening payroll Anda." tag="Payroll" color={colors.mint[500]} bg={colors.mint[100]} icon="wallet" />
-            <MiniAnnouncement title="Libur Hari Raya Waisak" body="Kantor tutup Senin, 11 Mei 2026." tag="Libur" color={colors.coral[500]} bg={colors.coral[100]} icon="calendar" />
-          </ScrollView>
-        </View>
-
-        {/* Saldo Cuti */}
-        <View style={{ paddingHorizontal: 16, marginTop: 22 }}>
-          <SectionHeader title="Saldo Cuti" action="Ajukan cuti →" onAction={() => router.push("/cuti/ajukan")} />
-          <Card pad={16} radius={20}>
-            <View style={{ flexDirection: "row", gap: 14 }}>
-              <LeaveDial label="Tahunan" used={4} total={12} color={colors.brand[500]} />
-              <LeaveDial label="Sakit" used={1} total={12} color={colors.coral[500]} />
+        {/* Pengumuman — horizontal carousel (pinned & terbaru di depan) */}
+        {announcements.length > 0 ? (
+          <View style={{ marginTop: 22 }}>
+            <View style={{ paddingHorizontal: 16 }}>
+              <SectionHeader title="Pengumuman" action="Lihat semua" onAction={() => router.push("/pengumuman")} />
             </View>
-          </Card>
-        </View>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ paddingHorizontal: 16, gap: 12, paddingBottom: 4 }}
+            >
+              {announcements.map((a) => (
+                <HomeAnnouncementCard key={a.id} a={a} onPress={() => router.push(`/pengumuman/${a.id}`)} />
+              ))}
+            </ScrollView>
+          </View>
+        ) : null}
       </ScrollView>
 
       {/* Modal daftar kantor (lokasi clock WFO/MULTIPLE > 3 kantor) */}
@@ -638,101 +645,37 @@ function StatCell({ n, label, color, border }: { n: number; label: string; color
   );
 }
 
-function AnnouncementCard({ title, body, tag, date }: { title: string; body: string; tag: string; date: string }) {
+function HomeAnnouncementCard({ a, onPress }: { a: AnnouncementListItem; onPress: () => void }) {
+  const tint = categoryTint(a.category);
+  const pinned = a.isPinned;
+  // Pinned → kartu warna primary, teks putih.
+  const cardBg = pinned ? colors.brand[500] : colors.neutral[0];
+  const titleColor = pinned ? "#fff" : colors.neutral[900];
+  const bodyColor = pinned ? "rgba(255,255,255,0.85)" : colors.neutral[500];
+  const dateColor = pinned ? "rgba(255,255,255,0.8)" : colors.neutral[400];
+  const tagBg = pinned ? "rgba(255,255,255,0.2)" : tint.bg;
+  const tagFg = pinned ? "#fff" : tint.fg;
   return (
-    <LinearGradient
-      colors={[colors.brand[950], colors.brand[800]]}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-      style={{ borderRadius: 20, padding: 16, width: 260 }}
-    >
-      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-        <View style={{ backgroundColor: "rgba(255,255,255,0.15)", paddingHorizontal: 9, paddingVertical: 3, borderRadius: 999 }}>
-          <Txt size={10.5} weight="bold" color="#fff">
-            {tag}
-          </Txt>
+    <Pressable onPress={onPress} style={({ pressed }) => ({ opacity: pressed ? 0.85 : 1 })}>
+      <View style={[{ width: 262, borderRadius: 18, overflow: "hidden", backgroundColor: cardBg }, pinned ? shadows.elevated : shadows.card]}>
+        {a.bannerUrl ? (
+          <CachedImage uri={a.bannerUrl} style={{ width: "100%", height: 110, backgroundColor: colors.neutral[100] }} />
+        ) : null}
+        <View style={{ padding: 14 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 6 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexShrink: 1 }}>
+              <View style={{ paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999, backgroundColor: tagBg }}>
+                <Txt size={9.5} weight="extrabold" color={tagFg} style={{ letterSpacing: 0.3 }}>{tint.label.toUpperCase()}</Txt>
+              </View>
+              {pinned ? <Icon name="star" size={12} color="#fff" strokeWidth={2.4} fill="#fff" /> : null}
+            </View>
+            <Txt size={10.5} weight="semibold" color={dateColor}>{announcementShortDate(a.publishedAt)}</Txt>
+          </View>
+          <Txt size={14} weight="extrabold" color={titleColor} style={{ marginTop: 8, lineHeight: 18 }} numberOfLines={2}>{a.title}</Txt>
+          {a.excerpt ? <Txt size={11.5} color={bodyColor} style={{ marginTop: 4, lineHeight: 16 }} numberOfLines={2}>{a.excerpt}</Txt> : null}
         </View>
-        <Txt size={10.5} weight="semibold" color="rgba(255,255,255,0.8)">
-          {date}
-        </Txt>
       </View>
-      <Txt size={16} weight="extrabold" color="#fff" style={{ marginTop: 10 }}>
-        {title}
-      </Txt>
-      <Txt size={12.5} color="rgba(255,255,255,0.8)" style={{ marginTop: 4, lineHeight: 18 }}>
-        {body}
-      </Txt>
-    </LinearGradient>
+    </Pressable>
   );
 }
 
-function MiniAnnouncement({
-  title,
-  body,
-  tag,
-  color,
-  bg,
-  icon,
-}: {
-  title: string;
-  body: string;
-  tag: string;
-  color: string;
-  bg: string;
-  icon: IconName;
-}) {
-  return (
-    <Card pad={14} radius={20} style={{ width: 240, flexDirection: "row", gap: 12 }}>
-      <View style={{ width: 38, height: 38, borderRadius: 11, backgroundColor: bg, alignItems: "center", justifyContent: "center" }}>
-        <Icon name={icon} size={18} color={color} strokeWidth={2} />
-      </View>
-      <View style={{ flex: 1 }}>
-        <Txt size={9.5} weight="extrabold" color={color}>
-          {tag.toUpperCase()}
-        </Txt>
-        <Txt size={13} weight="extrabold" color={colors.neutral[900]} style={{ marginTop: 2 }}>
-          {title}
-        </Txt>
-        <Txt size={11.5} color={colors.neutral[500]} style={{ marginTop: 3, lineHeight: 16 }}>
-          {body}
-        </Txt>
-      </View>
-    </Card>
-  );
-}
-
-function LeaveDial({ label, used, total, color }: { label: string; used: number; total: number; color: string }) {
-  const r = 30;
-  const circ = 2 * Math.PI * r;
-  const pct = used / total;
-  const left = total - used;
-  return (
-    <View style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 12 }}>
-      <Svg width={72} height={72} viewBox="0 0 72 72">
-        <Circle cx={36} cy={36} r={r} fill="none" stroke={colors.neutral[100]} strokeWidth={7} />
-        <Circle
-          cx={36}
-          cy={36}
-          r={r}
-          fill="none"
-          stroke={color}
-          strokeWidth={7}
-          strokeDasharray={`${circ * pct} ${circ}`}
-          strokeLinecap="round"
-          transform="rotate(-90 36 36)"
-        />
-        <SvgText x={36} y={41} textAnchor="middle" fontSize={16} fontWeight="800" fill={colors.neutral[800]} fontFamily={fonts.extrabold}>
-          {left}
-        </SvgText>
-      </Svg>
-      <View>
-        <Txt size={12} weight="bold" color={colors.neutral[700]}>
-          {label}
-        </Txt>
-        <Txt size={10.5} color={colors.neutral[500]} style={{ marginTop: 1 }}>
-          {left} hari tersisa
-        </Txt>
-      </View>
-    </View>
-  );
-}

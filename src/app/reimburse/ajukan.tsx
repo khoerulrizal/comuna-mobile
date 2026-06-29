@@ -9,6 +9,7 @@ import { Card, Icon, Txt } from "@/components/ui";
 import { DatePicker } from "@/components/DatePicker";
 import { colors, fonts, radii } from "@/theme/tokens";
 import { AuthError, ApiError } from "@/lib/api";
+import { compressImage } from "@/lib/image";
 import {
   getReimburseContext, submitReimburseRequest, uploadReimburseAttachment, categoryVisual, rupiah,
   type ReimburseCategory, type ReimburseContext,
@@ -92,7 +93,9 @@ export default function AjukanReimburseScreen() {
       ? await ImagePicker.launchCameraAsync({ quality: 0.6, mediaTypes: ["images"] })
       : await ImagePicker.launchImageLibraryAsync({ quality: 0.6, mediaTypes: ["images"], allowsMultipleSelection: true });
     if (!res.canceled) {
-      const uris = res.assets.map((a) => a.uri).filter(Boolean);
+      const uris = await Promise.all(
+        res.assets.filter((a) => a.uri).map((a) => compressImage(a.uri, { width: a.width })),
+      );
       if (uris.length) setAttachments((prev) => [...prev, ...uris]);
     }
   }

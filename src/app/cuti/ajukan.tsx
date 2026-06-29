@@ -9,6 +9,7 @@ import { Card, Icon, Txt } from "@/components/ui";
 import { DatePicker } from "@/components/DatePicker";
 import { colors, fonts, radii } from "@/theme/tokens";
 import { AuthError, ApiError } from "@/lib/api";
+import { compressImage } from "@/lib/image";
 import {
   getLeaveContext, submitLeaveRequest, uploadLeaveAttachment, toYMD, leaveCategoryVisual,
   effectiveMaxDays, leavePeriodLabel, policySubtitle,
@@ -84,7 +85,8 @@ export default function AjukanCutiScreen() {
     const res = src === "camera"
       ? await ImagePicker.launchCameraAsync({ quality: 0.6, mediaTypes: ["images"] })
       : await ImagePicker.launchImageLibraryAsync({ quality: 0.6, mediaTypes: ["images"] });
-    if (!res.canceled && res.assets[0]?.uri) setAttachmentUri(res.assets[0].uri);
+    const asset = res.canceled ? null : res.assets[0];
+    if (asset?.uri) setAttachmentUri(await compressImage(asset.uri, { width: asset.width }));
   }
 
   async function submit() {

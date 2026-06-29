@@ -33,6 +33,7 @@ export interface OvertimeContext {
   policies: OvertimePolicyOption[];
   monthlyWage: number;
   summary: OvertimeSummary | null;
+  tzAbbr: string | null;
 }
 
 export interface OvertimeRequestRow {
@@ -73,6 +74,7 @@ export interface OvertimeRequestDetail extends OvertimeRequestRow {
   rejectionNote: string | null;
   approvals: OvertimeApprovalEntry[];
   statusLogs: OvertimeStatusLogEntry[];
+  tzAbbr: string | null;
 }
 
 export interface OvertimeSubmitBody {

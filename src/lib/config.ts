@@ -31,3 +31,8 @@ export const DEVICE_NAME = [Platform.OS, Device.modelName].filter(Boolean).join(
 // Peta (expo-maps) butuh DEV BUILD + (Android) Google Maps API key. Default OFF →
 // fallback tampilan koordinat sampai siap. Aktifkan: EXPO_PUBLIC_MAPS_ENABLED=1.
 export const MAPS_ENABLED = process.env.EXPO_PUBLIC_MAPS_ENABLED?.trim() === "1";
+
+// Google Maps JavaScript API key (untuk pemilih lokasi berbasis WebView, mis.
+// aktivitas Field). Kosong → fallback OpenStreetMap. Bisa pakai key web yang sama
+// bila referrer WebView (lihat baseUrl) diizinkan di Google Cloud Console.
+export const GOOGLE_MAPS_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY?.trim() ?? "";

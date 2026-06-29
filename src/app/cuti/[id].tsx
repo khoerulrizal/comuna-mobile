@@ -1,11 +1,12 @@
 // Status Persetujuan Cuti — hero status + progress + next-action + linimasa + detail. Ikut desain.
 import { useCallback, useMemo, useState } from "react";
-import { ActivityIndicator, Alert, Linking, Pressable, RefreshControl, ScrollView, View } from "react-native";
+import { ActivityIndicator, Alert, Pressable, RefreshControl, ScrollView, View } from "react-native";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { Card, Icon, Txt } from "@/components/ui";
+import { DocPreviewModal, type PreviewDoc } from "@/components/DocPreviewModal";
 import { colors, fonts } from "@/theme/tokens";
 import { AuthError } from "@/lib/api";
 import {
@@ -38,6 +39,7 @@ export default function CutiDetailScreen() {
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [cancelling, setCancelling] = useState(false);
+  const [previewDoc, setPreviewDoc] = useState<PreviewDoc | null>(null);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -197,7 +199,7 @@ export default function CutiDetailScreen() {
               <Div />
               <Row label="Durasi" value={data.isHalfDay ? `Setengah hari${data.halfDaySession ? ` (${data.halfDaySession === "MORNING" ? "Pagi" : "Siang"})` : ""}` : `${data.totalDays} hari`} icon="clock" color={colors.mint[700]} bg={colors.mint[100]} />
               {data.reason ? (<><Div /><Row label="Alasan" value={data.reason} icon="heart" color={colors.amber[700]} bg={colors.amber[100]} /></>) : null}
-              {data.attachmentUrl ? (<><Div /><Pressable onPress={() => Linking.openURL(data.attachmentUrl!)}><Row label="Lampiran" value="Lihat dokumen →" icon="link" color={colors.coral[700]} bg={colors.coral[100]} valueColor={colors.brand[600]} /></Pressable></>) : null}
+              {data.attachmentUrl ? (<><Div /><Pressable onPress={() => setPreviewDoc({ url: data.attachmentUrl!, name: "Lampiran Cuti" })}><Row label="Lampiran" value="Lihat dokumen →" icon="link" color={colors.coral[700]} bg={colors.coral[100]} valueColor={colors.brand[600]} /></Pressable></>) : null}
             </Card>
           </ScrollView>
 
@@ -211,6 +213,8 @@ export default function CutiDetailScreen() {
           ) : null}
         </>
       )}
+
+      <DocPreviewModal doc={previewDoc} onClose={() => setPreviewDoc(null)} />
     </View>
   );
 }

@@ -10,6 +10,7 @@ import { DatePicker } from "@/components/DatePicker";
 import { TimePicker } from "@/components/TimePicker";
 import { colors, fonts, radii } from "@/theme/tokens";
 import { AuthError, ApiError } from "@/lib/api";
+import { compressImage } from "@/lib/image";
 import {
   getOvertimeContext, submitOvertimeRequest, uploadOvertimeAttachment,
   addDurationToTime, hoursLabel, isWeeklyRestDay, estimateOvertime, rupiah,
@@ -38,12 +39,13 @@ export default function AjukanLemburScreen() {
   const [showDate, setShowDate] = useState(false);
   const [showStart, setShowStart] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [tzAbbr, setTzAbbr] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
       setLoadErr(null);
       const ctx = await getOvertimeContext();
-      setPolicies(ctx.policies); setMonthlyWage(ctx.monthlyWage);
+      setPolicies(ctx.policies); setMonthlyWage(ctx.monthlyWage); setTzAbbr(ctx.tzAbbr);
     } catch (e) {
       if (e instanceof AuthError) { router.replace("/login"); return; }
       setLoadErr(e instanceof Error ? e.message : "Gagal memuat kebijakan lembur");
@@ -76,7 +78,8 @@ export default function AjukanLemburScreen() {
     const res = src === "camera"
       ? await ImagePicker.launchCameraAsync({ quality: 0.6, mediaTypes: ["images"] })
       : await ImagePicker.launchImageLibraryAsync({ quality: 0.6, mediaTypes: ["images"] });
-    if (!res.canceled && res.assets[0]?.uri) setAttachmentUri(res.assets[0].uri);
+    const asset = res.canceled ? null : res.assets[0];
+    if (asset?.uri) setAttachmentUri(await compressImage(asset.uri, { width: asset.width }));
   }
 
   async function submit() {
@@ -91,7 +94,7 @@ export default function AjukanLemburScreen() {
         params: {
           id: r.id,
           date: `${fmtDate(date)}`,
-          time: `${startTime} – ${endTime}`,
+          time: `${startTime} – ${endTime}${tzAbbr ? ` ${tzAbbr}` : ""}`,
           hours: hoursLabel(totalHours),
           reason: reason.trim(),
           comp: estimate ? (estimate.pay != null ? rupiah(estimate.pay) : `${estimate.leaveHours} jam cuti`) : "",
@@ -134,7 +137,7 @@ export default function AjukanLemburScreen() {
                 {/* Waktu mulai (24 jam) */}
                 <Pressable onPress={() => setShowStart(true)} style={{ flex: 1, flexDirection: "row", alignItems: "center", paddingHorizontal: 14, paddingVertical: 12 }}>
                   <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: colors.mint[500] + "22", alignItems: "center", justifyContent: "center" }}><Icon name="clock" size={16} color={colors.mint[500]} /></View>
-                  <View style={{ marginLeft: 12 }}><Txt size={11.5} color={colors.neutral[500]}>Waktu Mulai</Txt><Txt size={14} weight="semibold" color={startTime ? colors.neutral[800] : colors.neutral[400]}>{startTime ?? "--:--"}</Txt></View>
+                  <View style={{ marginLeft: 12 }}><Txt size={11.5} color={colors.neutral[500]}>Waktu Mulai</Txt><Txt size={14} weight="semibold" color={startTime ? colors.neutral[800] : colors.neutral[400]}>{startTime ? `${startTime}${tzAbbr ? ` ${tzAbbr}` : ""}` : "--:--"}</Txt></View>
                 </Pressable>
                 {/* Durasi (stepper, maks kebijakan) */}
                 <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 14, paddingVertical: 8, gap: 10 }}>

@@ -1,11 +1,12 @@
 // Detail Reimbursement — hero status + bukti + detail + linimasa approval + batal. Ikut desain.
 import { useCallback, useMemo, useState } from "react";
-import { ActivityIndicator, Alert, Image, Linking, Pressable, RefreshControl, ScrollView, View } from "react-native";
+import { ActivityIndicator, Alert, Image, Pressable, RefreshControl, ScrollView, View } from "react-native";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { Card, Icon, Txt } from "@/components/ui";
+import { DocPreviewModal, type PreviewDoc } from "@/components/DocPreviewModal";
 import { colors, fonts } from "@/theme/tokens";
 import { AuthError } from "@/lib/api";
 import {
@@ -49,6 +50,7 @@ export default function ReimburseDetailScreen() {
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [cancelling, setCancelling] = useState(false);
+  const [previewDoc, setPreviewDoc] = useState<PreviewDoc | null>(null);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -147,7 +149,7 @@ export default function ReimburseDetailScreen() {
                 <Txt size={12.5} weight="extrabold" color={colors.neutral[700]} style={{ marginTop: 16, marginBottom: 8 }}>Bukti / Struk{data.attachments.length > 1 ? ` (${data.attachments.length})` : ""}</Txt>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10 }}>
                   {data.attachments.map((a, i) => (
-                    <Pressable key={`${a.url}-${i}`} onPress={() => Linking.openURL(a.url)}>
+                    <Pressable key={`${a.url}-${i}`} onPress={() => setPreviewDoc({ url: a.url, name: a.name, mimeType: a.mimeType })}>
                       {isImage(a.url, a.mimeType) ? (
                         <Image source={{ uri: a.url }} style={{ width: 120, height: 150, borderRadius: 14, backgroundColor: colors.neutral[100] }} />
                       ) : (
@@ -247,6 +249,8 @@ export default function ReimburseDetailScreen() {
           ) : null}
         </>
       )}
+
+      <DocPreviewModal doc={previewDoc} onClose={() => setPreviewDoc(null)} />
     </View>
   );
 }

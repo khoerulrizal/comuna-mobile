@@ -1,11 +1,12 @@
 // Status Pengajuan Lembur — hero + progress + next-action + linimasa + detail. Ikut desain.
 import { useCallback, useMemo, useState } from "react";
-import { ActivityIndicator, Alert, Linking, Pressable, RefreshControl, ScrollView, View } from "react-native";
+import { ActivityIndicator, Alert, Pressable, RefreshControl, ScrollView, View } from "react-native";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { Card, Icon, Txt } from "@/components/ui";
+import { DocPreviewModal, type PreviewDoc } from "@/components/DocPreviewModal";
 import { colors, fonts } from "@/theme/tokens";
 import { AuthError } from "@/lib/api";
 import {
@@ -39,6 +40,7 @@ export default function LemburDetailScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState(false);
+  const [previewDoc, setPreviewDoc] = useState<PreviewDoc | null>(null);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -97,7 +99,7 @@ export default function LemburDetailScreen() {
                 <Txt size={11.5} weight="bold" color="rgba(255,255,255,0.95)">{statusText(data.status)}</Txt>
               </View>
               <Txt size={18} weight="extrabold" color="#fff" style={{ marginTop: 14 }}>Lembur · {hoursLabel(data.totalHours)}</Txt>
-              <Txt size={12.5} color="rgba(255,255,255,0.9)" style={{ marginTop: 2 }}>{otDateLabel(data.date, true)} · {data.startTime} – {data.endTime}</Txt>
+              <Txt size={12.5} color="rgba(255,255,255,0.9)" style={{ marginTop: 2 }}>{otDateLabel(data.date, true)} · {data.startTime} – {data.endTime}{data.tzAbbr ? ` ${data.tzAbbr}` : ""}</Txt>
               {progress.total > 0 ? (
                 <View style={{ marginTop: 14 }}>
                   <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 6 }}>
@@ -194,9 +196,9 @@ export default function LemburDetailScreen() {
               {comp ? <><DRow label="Kompensasi" value={comp} icon="wallet" color={colors.mint[700]} bg={colors.mint[100]} valueColor={colors.mint[700]} /><Div /></> : null}
               <DRow label="Tanggal" value={otDateLabel(data.date, true)} icon="calendar" color={colors.brand[600]} bg={colors.brand[100]} />
               <Div />
-              <DRow label="Waktu" value={`${data.startTime} – ${data.endTime} · ${hoursLabel(data.totalHours)}`} icon="clock" color={colors.amber[700]} bg={colors.amber[100]} />
+              <DRow label="Waktu" value={`${data.startTime} – ${data.endTime}${data.tzAbbr ? ` ${data.tzAbbr}` : ""} · ${hoursLabel(data.totalHours)}`} icon="clock" color={colors.amber[700]} bg={colors.amber[100]} />
               {data.reason ? <><Div /><DRow label="Alasan" value={data.reason} icon="check" color={colors.coral[700]} bg={colors.coral[100]} /></> : null}
-              {data.attachmentUrl ? <><Div /><Pressable onPress={() => Linking.openURL(data.attachmentUrl!)}><DRow label="Lampiran" value="Lihat dokumen →" icon="link" color={colors.brand[600]} bg={colors.brand[100]} valueColor={colors.brand[600]} /></Pressable></> : null}
+              {data.attachmentUrl ? <><Div /><Pressable onPress={() => setPreviewDoc({ url: data.attachmentUrl!, name: "Lampiran Lembur" })}><DRow label="Lampiran" value="Lihat dokumen →" icon="link" color={colors.brand[600]} bg={colors.brand[100]} valueColor={colors.brand[600]} /></Pressable></> : null}
             </Card>
           </ScrollView>
 
@@ -210,6 +212,8 @@ export default function LemburDetailScreen() {
           ) : null}
         </>
       )}
+
+      <DocPreviewModal doc={previewDoc} onClose={() => setPreviewDoc(null)} />
     </View>
   );
 }
