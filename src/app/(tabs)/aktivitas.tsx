@@ -122,8 +122,8 @@ export default function AktivitasScreen() {
                 <View>
                   {nodes.map((n, i) =>
                     n.t === "act"
-                      ? <ActivityEntry key={n.key} a={n.act} last={i === nodes.length - 1} />
-                      : <AttendanceEntry key={n.key} clock={n.clock} type={n.t} tzAbbr={data.attendance?.tzAbbr ?? null} last={i === nodes.length - 1} />,
+                      ? <ActivityEntry key={n.key} a={n.act} tzAbbr={data.tzAbbr} last={i === nodes.length - 1} />
+                      : <AttendanceEntry key={n.key} clock={n.clock} type={n.t} tzAbbr={data.attendance?.tzAbbr ?? data.tzAbbr} date={data.date} last={i === nodes.length - 1} />,
                   )}
                 </View>
               )}
@@ -135,7 +135,7 @@ export default function AktivitasScreen() {
   );
 }
 
-function AttendanceEntry({ clock, type, tzAbbr, last }: { clock: ClockEntry; type: "in" | "out"; tzAbbr: string | null; last: boolean }) {
+function AttendanceEntry({ clock, type, tzAbbr, date, last }: { clock: ClockEntry; type: "in" | "out"; tzAbbr: string | null; date: string; last: boolean }) {
   const isIn = type === "in";
   const color = isIn ? colors.mint[700] : colors.coral[700];
   const title = isIn ? "Clock In" : "Clock Out";
@@ -154,35 +154,40 @@ function AttendanceEntry({ clock, type, tzAbbr, last }: { clock: ClockEntry; typ
         {!last ? <View style={{ width: 1.5, flex: 1, minHeight: 16, backgroundColor: colors.neutral[100], marginTop: 2 }} /> : null}
       </View>
       <View style={{ flex: 1, minWidth: 0 }}>
-        <Card pad={12} radius={14}>
-          <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 4 }}>
-            <View style={{ paddingHorizontal: 7, paddingVertical: 2, borderRadius: 999, backgroundColor: `${color}18` }}>
-              <Txt size={9.5} weight="extrabold" color={color} style={{ letterSpacing: 0.3 }}>ABSENSI</Txt>
-            </View>
-          </View>
-          <Txt size={13.5} weight="extrabold" color={colors.neutral[900]}>{title}</Txt>
-          {detail ? <Txt size={11.5} color={colors.neutral[500]} style={{ marginTop: 3 }}>{detail}</Txt> : null}
-          {clock.photoUrl ? (
-            <View style={{ flexDirection: "row", gap: 6, marginTop: 10 }}>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: colors.neutral[50], paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 }}>
-                <Icon name="camera" size={11} color={colors.neutral[500]} strokeWidth={2} />
-                <Txt size={10.5} weight="semibold" color={colors.neutral[600]}>Swafoto</Txt>
+        <Pressable onPress={() => router.push(`/kehadiran/${date}`)} style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}>
+          <Card pad={12} radius={14}>
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+              <View style={{ paddingHorizontal: 7, paddingVertical: 2, borderRadius: 999, backgroundColor: `${color}18` }}>
+                <Txt size={9.5} weight="extrabold" color={color} style={{ letterSpacing: 0.3 }}>ABSENSI</Txt>
               </View>
+              <Icon name="chevronRight" size={14} color={colors.neutral[300]} />
             </View>
-          ) : null}
-        </Card>
+            <Txt size={13.5} weight="extrabold" color={colors.neutral[900]}>{title}</Txt>
+            {detail ? <Txt size={11.5} color={colors.neutral[500]} style={{ marginTop: 3 }}>{detail}</Txt> : null}
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 10 }}>
+              {clock.photoUrl ? (
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: colors.neutral[50], paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 }}>
+                  <Icon name="camera" size={11} color={colors.neutral[500]} strokeWidth={2} />
+                  <Txt size={10.5} weight="semibold" color={colors.neutral[600]}>Swafoto</Txt>
+                </View>
+              ) : null}
+              <Txt size={10.5} weight="bold" color={colors.brand[600]}>Detail kehadiran →</Txt>
+            </View>
+          </Card>
+        </Pressable>
       </View>
     </View>
   );
 }
 
-function ActivityEntry({ a, last }: { a: ActivityItem; last: boolean }) {
+function ActivityEntry({ a, tzAbbr, last }: { a: ActivityItem; tzAbbr: string | null; last: boolean }) {
   const meta = activityTypeMeta(a.category);
   const time = activityTimeLabel(a.metadata);
   const summary = activitySummary(a.category, a.metadata);
   const muted = a.category === "BREAK";
   const chips: { icon: IconName; label: string }[] = [];
   if (a.checkInLat != null && a.checkInLng != null) chips.push({ icon: "mapPin", label: "Lokasi" });
+  if (a.metadata.attachments && a.metadata.attachments.length > 0) chips.push({ icon: "doc", label: `${a.metadata.attachments.length} lampiran` });
   if (a.photoUrl) chips.push({ icon: "camera", label: "Foto" });
   if (a.signatureUrl) chips.push({ icon: "edit", label: "TTD" });
 
@@ -190,6 +195,7 @@ function ActivityEntry({ a, last }: { a: ActivityItem; last: boolean }) {
     <View style={{ flexDirection: "row", gap: 12, marginBottom: 14 }}>
       <View style={{ width: 58, paddingTop: 10 }}>
         <Txt size={11} weight="bold" color={colors.neutral[500]}>{time ?? "—"}</Txt>
+        {time && tzAbbr ? <Txt size={9} weight="semibold" color={colors.neutral[400]}>{tzAbbr}</Txt> : null}
       </View>
       <View style={{ alignItems: "center" }}>
         <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: `${meta.color}22`, alignItems: "center", justifyContent: "center", marginTop: 6 }}>

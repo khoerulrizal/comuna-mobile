@@ -41,6 +41,7 @@ export interface ActivityItem {
   id: string;
   category: ActivityCategory;
   date: string;
+  tzAbbr?: string | null; // zona shift (diisi di detail)
   notes: string | null;
   photoUrl: string | null;
   signatureUrl: string | null;
@@ -73,9 +74,16 @@ export interface DayAttendance {
 export interface ActivityList {
   date: string;
   todayDate: string;
+  tzAbbr: string | null; // zona shift yg berlaku (WIB/WITA/WIT)
   dateChips: DateChip[];
   attendance: DayAttendance | null;
   activities: ActivityItem[];
+}
+
+/** Tempel zona waktu pada label jam (kosongkan utk tanda "—"). */
+export function withTz(value: string | null | undefined, tzAbbr: string | null | undefined): string {
+  if (!value || value === "—") return value ?? "—";
+  return tzAbbr ? `${value} ${tzAbbr}` : value;
 }
 
 export interface ActivityCreateBody {

@@ -11,7 +11,7 @@ import { DocPreviewModal, isImageDoc, type PreviewDoc } from "@/components/DocPr
 import { colors, fonts } from "@/theme/tokens";
 import { AuthError } from "@/lib/api";
 import {
-  activityTimeLabel, activityTitle, activityTypeMeta, formatEstimasi, getActivity,
+  activityTimeLabel, activityTitle, activityTypeMeta, formatEstimasi, getActivity, withTz,
   type ActivityAttachment, type ActivityItem,
 } from "@/lib/activity";
 
@@ -51,6 +51,7 @@ export default function AktivitasDetailScreen() {
 
   const meta = data ? activityTypeMeta(data.category) : null;
   const md = data?.metadata ?? {};
+  const tzAbbr = data?.tzAbbr ?? null;
   const attachments = (md.attachments ?? []) as ActivityAttachment[];
 
   return (
@@ -78,7 +79,7 @@ export default function AktivitasDetailScreen() {
                 <Icon name={meta.icon} size={13} color="#fff" strokeWidth={2.4} />
                 <Txt size={10.5} weight="extrabold" color="#fff" style={{ letterSpacing: 0.4 }}>{meta.label.toUpperCase()}</Txt>
               </View>
-              {activityTimeLabel(md) ? <Txt size={12} weight="bold" color="rgba(255,255,255,0.9)">{activityTimeLabel(md)}</Txt> : null}
+              {activityTimeLabel(md) ? <Txt size={12} weight="bold" color="rgba(255,255,255,0.9)">{withTz(activityTimeLabel(md), tzAbbr)}</Txt> : null}
             </View>
             <Txt size={20} weight="extrabold" color="#fff" style={{ marginTop: 12, lineHeight: 26, fontFamily: fonts.extrabold }}>{activityTitle(data)}</Txt>
             <Txt size={11.5} color="rgba(255,255,255,0.85)" style={{ marginTop: 4 }}>{fullDate(data.date)}</Txt>
@@ -96,8 +97,8 @@ export default function AktivitasDetailScreen() {
           {data.category === "MEETING" ? (
             <Section title="Waktu">
               <InfoRow label="Tanggal" value={fullDate(data.date)} />
-              <InfoRow label="Mulai" value={md.startTime ?? "—"} />
-              <InfoRow label="Selesai" value={md.endTime ?? "—"} sub={md.duration ?? undefined} last />
+              <InfoRow label="Mulai" value={withTz(md.startTime, tzAbbr)} />
+              <InfoRow label="Selesai" value={withTz(md.endTime, tzAbbr)} sub={md.duration ?? undefined} last />
             </Section>
           ) : null}
 
@@ -105,7 +106,7 @@ export default function AktivitasDetailScreen() {
             <>
               <Section title="Deadline">
                 <InfoRow label="Tenggat" value={dueLabel(md.dueDate)} />
-                <InfoRow label="Jam" value={md.dueTime ?? "—"} />
+                <InfoRow label="Jam" value={withTz(md.dueTime, tzAbbr)} />
                 <InfoRow label="Estimasi" value={formatEstimasi(md) ?? "—"} last />
               </Section>
               <Section title="Lainnya">
@@ -119,8 +120,8 @@ export default function AktivitasDetailScreen() {
             <>
               <Section title="Jadwal">
                 <InfoRow label="Tanggal" value={fullDate(data.date)} />
-                <InfoRow label="Berangkat" value={md.departureTime ?? "—"} />
-                <InfoRow label="Estimasi kembali" value={md.estimatedReturn ?? "—"} last />
+                <InfoRow label="Berangkat" value={withTz(md.departureTime, tzAbbr)} />
+                <InfoRow label="Estimasi kembali" value={withTz(md.estimatedReturn, tzAbbr)} last />
               </Section>
               <Txt size={12.5} weight="extrabold" color={colors.neutral[700]} style={{ marginTop: 18, marginBottom: 8 }}>Lokasi tujuan</Txt>
               <Card pad={14} radius={16}>
@@ -140,8 +141,8 @@ export default function AktivitasDetailScreen() {
           {data.category === "TRAINING" ? (
             <>
               <Section title="Waktu">
-                <InfoRow label="Mulai" value={md.startTime ?? "—"} />
-                <InfoRow label="Selesai" value={md.endTime ?? "—"} sub={md.duration ?? undefined} last />
+                <InfoRow label="Mulai" value={withTz(md.startTime, tzAbbr)} />
+                <InfoRow label="Selesai" value={withTz(md.endTime, tzAbbr)} sub={md.duration ?? undefined} last />
               </Section>
               <Section title="Detail">
                 <InfoRow label="Format" value={md.format ? FORMAT_LABEL[md.format] ?? md.format : "—"} />
@@ -153,16 +154,16 @@ export default function AktivitasDetailScreen() {
 
           {data.category === "BREAK" ? (
             <Section title="Istirahat">
-              <InfoRow label="Mulai" value={md.startTime ?? "—"} />
-              <InfoRow label="Selesai" value={md.endTime ?? "—"} sub={md.duration ?? undefined} />
+              <InfoRow label="Mulai" value={withTz(md.startTime, tzAbbr)} />
+              <InfoRow label="Selesai" value={withTz(md.endTime, tzAbbr)} sub={md.duration ?? undefined} />
               <InfoRow label="Jenis" value={md.breakKind ? BREAK_KIND_LABEL[md.breakKind] ?? md.breakKind : "—"} last />
             </Section>
           ) : null}
 
           {data.category === "OTHER" && (md.startTime || md.endTime) ? (
             <Section title="Waktu">
-              <InfoRow label="Mulai" value={md.startTime ?? "—"} />
-              <InfoRow label="Selesai" value={md.endTime ?? "—"} last />
+              <InfoRow label="Mulai" value={withTz(md.startTime, tzAbbr)} />
+              <InfoRow label="Selesai" value={withTz(md.endTime, tzAbbr)} last />
             </Section>
           ) : null}
 
