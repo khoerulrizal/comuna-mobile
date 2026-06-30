@@ -1,5 +1,5 @@
 // Aktivitas — timeline harian + chip tanggal + tambah. Ikut desain Corelia.
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, View } from "react-native";
 import { router, useFocusEffect } from "expo-router";
 import { StatusBar } from "expo-status-bar";
@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Card, Icon, type IconName, Txt } from "@/components/ui";
 import { colors } from "@/theme/tokens";
 import { AuthError } from "@/lib/api";
+import { getCapabilities } from "@/lib/capabilities";
 import {
   activitiesTotalMinutes, activitySummary, activityTimeLabel, activityTitle, activityTypeMeta,
   durationLabel, getActivities, hhmmToMin, type ActivityItem, type ActivityList, type ClockEntry,
@@ -26,6 +27,16 @@ export default function AktivitasScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Ketersediaan modul Activities di paket (null = belum diketahui).
+  const [hasModule, setHasModule] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    getCapabilities()
+      .then((c) => { if (active) setHasModule(c.modules.includes("activities")); })
+      .catch(() => { /* biarkan null → tampilkan konten normal */ });
+    return () => { active = false; };
+  }, []);
 
   const load = useCallback(async (d?: string) => {
     try { setError(null); setData(await getActivities(d)); }
@@ -59,6 +70,27 @@ export default function AktivitasScreen() {
     if (data.attendance?.clockOut) arr.push({ key: "clock-out", sort: hhmmToMin(data.attendance.clockOut.time) ?? 24 * 60 + 2, t: "out", clock: data.attendance.clockOut });
     return arr.sort((x, y) => x.sort - y.sort);
   }, [data]);
+
+  // Modul Activities tidak termasuk paket → tab tetap ada, tampilkan info upgrade.
+  if (hasModule === false) {
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.neutral[25], paddingTop: insets.top }}>
+        <StatusBar style="dark" />
+        <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 10, backgroundColor: "#fff", borderBottomWidth: 1, borderBottomColor: colors.neutral[100] }}>
+          <Txt size={22} weight="extrabold" color={colors.neutral[900]}>Aktivitas</Txt>
+        </View>
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 32, gap: 14 }}>
+          <View style={{ width: 72, height: 72, borderRadius: 22, backgroundColor: colors.brand[100], alignItems: "center", justifyContent: "center" }}>
+            <Icon name="lock" size={32} color={colors.brand[600]} strokeWidth={1.8} />
+          </View>
+          <Txt size={16} weight="extrabold" color={colors.neutral[800]} style={{ textAlign: "center" }}>Modul Aktivitas belum aktif</Txt>
+          <Txt size={13} color={colors.neutral[500]} style={{ textAlign: "center", lineHeight: 19 }}>
+            Fitur ini belum termasuk dalam paket perusahaan Anda. Hubungi admin untuk meningkatkan ke paket yang lebih tinggi.
+          </Txt>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.neutral[25], paddingTop: insets.top }}>

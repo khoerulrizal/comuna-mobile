@@ -9,6 +9,7 @@ import { Avatar, Button, Card, Icon, type IconName, SectionHeader, Txt } from "@
 import { ChangePinModal, ConfirmModal, MessageModal } from "@/components/modals";
 import { colors } from "@/theme/tokens";
 import { formatTanggal, getProfile, type Profile } from "@/lib/profile";
+import { getManagerContext, type ManagerContext } from "@/lib/manager";
 import { hasPin } from "@/lib/pin";
 import { signOut } from "@/lib/auth";
 import { AuthError } from "@/lib/api";
@@ -27,6 +28,7 @@ const HELP_URL = "https://comuna.id/pusat-pengetahuan";
 export default function ProfilScreen() {
   const insets = useSafeAreaInsets();
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [mgr, setMgr] = useState<ManagerContext | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -45,13 +47,15 @@ export default function ProfilScreen() {
   const load = useCallback(async () => {
     try {
       setLoadError(null);
-      const [p, type, enabled, hp] = await Promise.all([
+      const [p, type, enabled, hp, mc] = await Promise.all([
         getProfile(),
         getBiometricType(),
         isBiometricEnabled(),
         hasPin(),
+        getManagerContext().catch(() => null),
       ]);
       setProfile(p);
+      setMgr(mc);
       setBioType(type);
       setBioEnabled(enabled);
       setPinSet(hp);
@@ -232,6 +236,17 @@ export default function ProfilScreen() {
               <MetaCell n={reviewLabel} label="Review" border />
             </View>
           </Card>
+
+          {/* Manajer — hanya untuk atasan (punya bawahan langsung) */}
+          {mgr?.isManager ? (
+            <View style={{ marginTop: 18 }}>
+              <SectionHeader title="Manajer" />
+              <Card pad={0} radius={18}>
+                <InfoRow label="Tim Saya" value={`${mgr.teamCount} bawahan langsung`} icon="users" color={colors.brand[500]} chevron onPress={() => router.push("/manager")} />
+                <InfoRow label="Performa Tim" value="KPI, OKR & peringkat" icon="target" color={colors.coral[500]} chevron onPress={() => router.push("/manager/performa")} last />
+              </Card>
+            </View>
+          ) : null}
 
           {/* Informasi Pribadi */}
           <View style={{ marginTop: 18 }}>

@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { Avatar, Card, Icon, type IconName, Pill, SectionHeader, Txt } from "@/components/ui";
 import { colors, radii, shadows } from "@/theme/tokens";
-import { me, review } from "@/data/mock";
+import { me } from "@/data/mock";
 import { AuthError } from "@/lib/api";
 import {
   clockLocationSummary,
@@ -19,7 +19,14 @@ import {
 } from "@/lib/home";
 import { getAttendanceStats, type AttendanceStats } from "@/lib/attendance-calendar";
 import { announcementShortDate, categoryTint, getAnnouncements, type AnnouncementListItem } from "@/lib/announcements";
+import { getPerformaSummary, type PerformaSummary } from "@/lib/performa";
+import { getCapabilities } from "@/lib/capabilities";
+import { getManagerContext, type ManagerContext } from "@/lib/manager";
 import { CachedImage } from "@/components/CachedImage";
+
+type QuickHref =
+  | "/cuti" | "/lembur" | "/kehadiran" | "/shift" | "/reimburse"
+  | "/slip-gaji" | "/bonus" | "/kalender" | "/pinjaman";
 
 /** Menit → "162j" / "162j 30m" untuk label jam kerja kartu Home. */
 function jamLabel(min: number): string {
@@ -33,6 +40,9 @@ export default function HomeScreen() {
   const [home, setHome] = useState<Home | null>(null);
   const [stats, setStats] = useState<AttendanceStats | null>(null);
   const [announcements, setAnnouncements] = useState<AnnouncementListItem[]>([]);
+  const [perf, setPerf] = useState<PerformaSummary | null>(null);
+  const [caps, setCaps] = useState<Set<string> | null>(null);
+  const [mgr, setMgr] = useState<ManagerContext | null>(null);
   const [offModal, setOffModal] = useState(false);
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [refreshing, setRefreshing] = useState(false);
@@ -45,14 +55,20 @@ export default function HomeScreen() {
 
   const load = useCallback(async () => {
     try {
-      const [h, s, ann] = await Promise.all([
+      const [h, s, ann, pf, cap, mc] = await Promise.all([
         getHome(),
         getAttendanceStats().catch(() => null),
         getAnnouncements(8).catch(() => null),
+        getPerformaSummary().catch(() => null),
+        getCapabilities().catch(() => null),
+        getManagerContext().catch(() => null),
       ]);
       setHome(h);
       if (s) setStats(s);
       if (ann) setAnnouncements(ann.announcements);
+      if (pf) setPerf(pf);
+      if (cap) setCaps(new Set(cap.modules));
+      setMgr(mc);
     } catch (e) {
       if (e instanceof AuthError) router.replace("/login");
       // selain itu: biarkan tampilan fallback — Home tetap berguna.
@@ -74,6 +90,9 @@ export default function HomeScreen() {
   }, [load]);
 
   const loaded = home != null;
+  // Modul yang aktif di paket perusahaan. Optimistic: selagi belum dimuat (null),
+  // anggap tersedia agar tak ada kedipan; setelah dimuat, sembunyikan yang tak ada.
+  const has = (key: string) => (caps == null ? true : caps.has(key));
   const profile = home?.profile;
   const shift = home?.shift ?? null;
   const greeting = profile?.greeting ?? "Halo";
@@ -227,7 +246,8 @@ export default function HomeScreen() {
           ) : null}
         </LinearGradient>
 
-        {/* Clock-in card — floating */}
+        {/* Clock-in card — floating (hanya bila modul Kehadiran ada di paket) */}
+        {has("attendance") ? (
         <View style={{ paddingHorizontal: 16, marginTop: -50 }}>
           <Card pad={18} radius={22} elevated>
             <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
@@ -332,68 +352,141 @@ export default function HomeScreen() {
             ) : null}
           </Card>
         </View>
+        ) : null}
 
-        {/* Quick actions */}
-        <View style={{ paddingHorizontal: 16, marginTop: 18 }}>
-          <SectionHeader title="Akses Cepat" />
-          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
-            <QuickAction icon="plane" label="Cuti" tone={colors.brand[500]} bg={colors.brand[100]} onPress={() => router.push("/cuti")} />
-            <QuickAction icon="clock" label="Lembur" tone={colors.amber[700]} bg={colors.amber[100]} onPress={() => router.push("/lembur")} />
-            <QuickAction icon="fingerprint" label="Kehadiran" tone={colors.mint[700]} bg={colors.mint[100]} onPress={() => router.push("/kehadiran")} />
-            <QuickAction icon="briefcase" label="Shift Saya" tone={colors.brand[500]} bg={colors.brand[100]} onPress={() => router.push("/shift")} />
-            <QuickAction icon="receipt" label="Reimburse" tone={colors.mint[700]} bg={colors.mint[100]} onPress={() => router.push("/reimburse")} />
-            <QuickAction icon="wallet" label="Slip Gaji" tone={colors.coral[700]} bg={colors.coral[100]} onPress={() => router.push("/slip-gaji")} />
-            <QuickAction icon="star" label="Bonus" tone={colors.amber[700]} bg={colors.amber[100]} onPress={() => router.push("/bonus")} />
-            <QuickAction icon="calendar" label="Kalender" tone={colors.brand[600]} bg={colors.brand[100]} onPress={() => router.push("/kalender")} />
-            <QuickAction icon="money" label="Pinjaman" tone={colors.mint[700]} bg={colors.mint[100]} onPress={() => router.push("/pinjaman")} />
+        {/* Manajer — hanya untuk Role Sistem MANAGER / admin */}
+        {mgr?.isManager ? (
+          <View style={{ paddingHorizontal: 16, marginTop: 18 }}>
+            <Pressable onPress={() => router.push("/manager")} style={({ pressed }) => ({ opacity: pressed ? 0.9 : 1 })}>
+              <LinearGradient colors={[colors.neutral[800], colors.brand[700]]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ borderRadius: 18, padding: 16, flexDirection: "row", alignItems: "center", gap: 14 }}>
+                <View style={{ width: 46, height: 46, borderRadius: 14, backgroundColor: "rgba(255,255,255,0.18)", alignItems: "center", justifyContent: "center" }}>
+                  <Icon name="users" size={24} color="#fff" strokeWidth={2} />
+                </View>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Txt size={10.5} weight="extrabold" color="rgba(255,255,255,0.8)" style={{ letterSpacing: 0.4 }}>MODE MANAJER</Txt>
+                  <Txt size={16} weight="extrabold" color="#fff" style={{ marginTop: 1 }}>Tim Saya</Txt>
+                  <Txt size={11.5} color="rgba(255,255,255,0.85)" style={{ marginTop: 1 }}>
+                    {mgr.teamCount > 0 ? `${mgr.teamCount} bawahan langsung · KPI, OKR, kehadiran` : "Kelola & pantau performa tim"}
+                  </Txt>
+                </View>
+                <Icon name="chevronRight" size={20} color="#fff" strokeWidth={2} />
+              </LinearGradient>
+            </Pressable>
           </View>
-        </View>
+        ) : null}
 
-        {/* Performa */}
-        <View style={{ paddingHorizontal: 16, marginTop: 24 }}>
-          <SectionHeader title="Performa" action="Lihat semua" />
-          {review.active && (
-            <LinearGradient
-              colors={[colors.brand[600], colors.coral[500]]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={{ borderRadius: 18, padding: 14, flexDirection: "row", alignItems: "center", gap: 12 }}
-            >
-              <View
-                style={{
-                  width: 42,
-                  height: 42,
-                  borderRadius: 12,
-                  backgroundColor: "rgba(255,255,255,0.2)",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <Icon name="star" size={22} color="#fff" strokeWidth={2} />
+        {/* Quick actions — hanya modul yang ada di paket perusahaan */}
+        {(() => {
+          const ALL_ACTIONS: { icon: IconName; label: string; tone: string; bg: string; href: QuickHref; module: string }[] = [
+            { icon: "plane", label: "Cuti", tone: colors.brand[500], bg: colors.brand[100], href: "/cuti", module: "leave" },
+            { icon: "clock", label: "Lembur", tone: colors.amber[700], bg: colors.amber[100], href: "/lembur", module: "overtime" },
+            { icon: "fingerprint", label: "Kehadiran", tone: colors.mint[700], bg: colors.mint[100], href: "/kehadiran", module: "attendance" },
+            { icon: "briefcase", label: "Shift Saya", tone: colors.brand[500], bg: colors.brand[100], href: "/shift", module: "shifts" },
+            { icon: "receipt", label: "Reimburse", tone: colors.mint[700], bg: colors.mint[100], href: "/reimburse", module: "reimbursement" },
+            { icon: "wallet", label: "Slip Gaji", tone: colors.coral[700], bg: colors.coral[100], href: "/slip-gaji", module: "payroll" },
+            { icon: "star", label: "Bonus", tone: colors.amber[700], bg: colors.amber[100], href: "/bonus", module: "bonus" },
+            { icon: "calendar", label: "Kalender", tone: colors.brand[600], bg: colors.brand[100], href: "/kalender", module: "calendar" },
+            { icon: "money", label: "Pinjaman", tone: colors.mint[700], bg: colors.mint[100], href: "/pinjaman", module: "loans" },
+          ];
+          const actions = ALL_ACTIONS.filter((a) => has(a.module));
+          if (actions.length === 0) return null;
+          return (
+            <View style={{ paddingHorizontal: 16, marginTop: 18 }}>
+              <SectionHeader title="Akses Cepat" />
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
+                {actions.map((a) => (
+                  <QuickAction key={a.href} icon={a.icon} label={a.label} tone={a.tone} bg={a.bg} onPress={() => router.push(a.href)} />
+                ))}
               </View>
-              <View style={{ flex: 1 }}>
-                <Txt size={10.5} weight="extrabold" color="rgba(255,255,255,0.85)">
-                  PERIODE REVIEW AKTIF
-                </Txt>
-                <Txt size={14} weight="extrabold" color="#fff" style={{ marginTop: 2 }}>
-                  {review.period}
-                </Txt>
-                <Txt size={11.5} color="rgba(255,255,255,0.85)" style={{ marginTop: 2 }}>
-                  Sisa {review.daysLeft} hari · progress {review.progress}%
-                </Txt>
-              </View>
-              <Icon name="chevronRight" size={20} color="#fff" strokeWidth={2} />
-            </LinearGradient>
-          )}
-          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 10 }}>
-            <PerfTile icon="target" label="KPI Saya" primary="74" suffix="/100" hint="Q2 · 4 indikator" accent={colors.brand[500]} bg={colors.brand[100]} />
-            <PerfTile icon="trendingUp" label="OKR" primary="62%" hint="2 objective aktif" accent={colors.coral[500]} bg={colors.coral[100]} />
-            <PerfTile icon="heart" label="Feedback" primary="2" suffix=" baru" hint="dari Budi, Maya" accent={colors.mint[500]} bg={colors.mint[100]} flag="BARU" />
-            <PerfTile icon="star" label="Review" primary="5" suffix=" hari" hint="sisa mengisi" accent={colors.amber[500]} bg={colors.amber[100]} flag="URGENT" />
+            </View>
+          );
+        })()}
+
+        {/* Performa — hanya muncul bila paket perusahaan punya modul Performa */}
+        {perf && (perf.available.kpi || perf.available.okr || perf.available.feedback || perf.available.reviews) ? (
+          <View style={{ paddingHorizontal: 16, marginTop: 24 }}>
+            <SectionHeader title="Performa" />
+
+            {/* Banner Review — selalu tampil bila modul Review ada di paket */}
+            {perf.available.reviews ? (
+              perf.review ? (
+                <Pressable onPress={() => router.push("/review")} style={({ pressed }) => ({ opacity: pressed ? 0.85 : 1 })}>
+                  <LinearGradient
+                    colors={[colors.brand[600], colors.coral[500]]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={{ borderRadius: 18, padding: 14, flexDirection: "row", alignItems: "center", gap: 12 }}
+                  >
+                    <View style={{ width: 42, height: 42, borderRadius: 12, backgroundColor: "rgba(255,255,255,0.2)", alignItems: "center", justifyContent: "center" }}>
+                      <Icon name="star" size={22} color="#fff" strokeWidth={2} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Txt size={10.5} weight="extrabold" color="rgba(255,255,255,0.85)">PERIODE REVIEW AKTIF</Txt>
+                      <Txt size={14} weight="extrabold" color="#fff" style={{ marginTop: 2 }}>{perf.review.cycleName}</Txt>
+                      <Txt size={11.5} color="rgba(255,255,255,0.85)" style={{ marginTop: 2 }}>
+                        {perf.review.daysLeft != null ? `Sisa ${perf.review.daysLeft} hari · ` : ""}progress {perf.review.progressPct}%
+                      </Txt>
+                    </View>
+                    <Icon name="chevronRight" size={20} color="#fff" strokeWidth={2} />
+                  </LinearGradient>
+                </Pressable>
+              ) : (
+                // Tidak ada siklus aktif → abu-abu, tidak bisa diklik.
+                <View style={{ borderRadius: 18, padding: 14, flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: colors.neutral[100] }}>
+                  <View style={{ width: 42, height: 42, borderRadius: 12, backgroundColor: colors.neutral[200], alignItems: "center", justifyContent: "center" }}>
+                    <Icon name="star" size={22} color={colors.neutral[400]} strokeWidth={2} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Txt size={10.5} weight="extrabold" color={colors.neutral[400]}>PERIODE REVIEW</Txt>
+                    <Txt size={14} weight="extrabold" color={colors.neutral[500]} style={{ marginTop: 2 }}>Tidak ada siklus aktif</Txt>
+                    <Txt size={11.5} color={colors.neutral[400]} style={{ marginTop: 2 }}>Belum ada review yang perlu diisi saat ini.</Txt>
+                  </View>
+                </View>
+              )
+            ) : null}
+
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 10 }}>
+              {perf.available.kpi ? (
+                <PerfTile
+                  icon="target" label="KPI Saya"
+                  primary={perf.kpi ? String(perf.kpi.avgScore) : "—"} suffix={perf.kpi ? "/100" : undefined}
+                  hint={perf.kpi ? (perf.kpi.kpiCount === 1 ? `${perf.kpi.indicatorCount} indikator` : `${perf.kpi.kpiCount} KPI · ${perf.kpi.indicatorCount} indikator`) : "Belum ada KPI"}
+                  accent={colors.brand[500]} bg={colors.brand[100]} onPress={() => router.push("/kpi")}
+                />
+              ) : null}
+              {perf.available.okr ? (
+                <PerfTile
+                  icon="trendingUp" label="OKR"
+                  primary={perf.okr ? `${perf.okr.avgProgress}%` : "—"}
+                  hint={perf.okr ? `${perf.okr.count} objective aktif` : "Belum ada OKR"}
+                  accent={colors.coral[500]} bg={colors.coral[100]} onPress={() => router.push("/okr")}
+                />
+              ) : null}
+              {perf.available.feedback ? (
+                <PerfTile
+                  icon="heart" label="Feedback"
+                  primary={String(perf.feedback.unread)} suffix=" baru"
+                  hint={perf.feedback.fromNames.length > 0 ? `dari ${perf.feedback.fromNames.join(", ")}` : "Tidak ada baru"}
+                  accent={colors.mint[500]} bg={colors.mint[100]} flag={perf.feedback.unread > 0 ? "BARU" : undefined}
+                  onPress={() => router.push("/feedback")}
+                />
+              ) : null}
+              {perf.available.reviews ? (
+                <PerfTile
+                  icon="star" label="Review"
+                  primary={perf.review ? String(perf.review.daysLeft ?? "—") : "—"} suffix={perf.review ? " hari" : undefined}
+                  hint={perf.review ? "sisa mengisi" : "Tak ada tugas"}
+                  accent={colors.amber[500]} bg={colors.amber[100]}
+                  flag={perf.review && perf.review.daysLeft != null && perf.review.daysLeft <= 7 ? "URGENT" : undefined}
+                  onPress={() => router.push("/review")}
+                />
+              ) : null}
+            </View>
           </View>
-        </View>
+        ) : null}
 
-        {/* Month stats */}
+        {/* Month stats — hanya bila modul Kehadiran ada di paket */}
+        {has("attendance") ? (
         <View style={{ paddingHorizontal: 16, marginTop: 22 }}>
           <SectionHeader title={`Bulan ini${stats ? ` · ${stats.monthLabel}` : ""}`} action="Lihat semua" onAction={() => router.push("/kehadiran")} />
           <Card pad={0} radius={22}>
@@ -426,9 +519,10 @@ export default function HomeScreen() {
             </View>
           </Card>
         </View>
+        ) : null}
 
-        {/* Pengumuman — horizontal carousel (pinned & terbaru di depan) */}
-        {announcements.length > 0 ? (
+        {/* Pengumuman — hanya bila modul Pengumuman ada di paket */}
+        {has("announcements") && announcements.length > 0 ? (
           <View style={{ marginTop: 22 }}>
             <View style={{ paddingHorizontal: 16 }}>
               <SectionHeader title="Pengumuman" action="Lihat semua" onAction={() => router.push("/pengumuman")} />
@@ -571,6 +665,7 @@ function PerfTile({
   accent,
   bg,
   flag,
+  onPress,
 }: {
   icon: IconName;
   label: string;
@@ -580,9 +675,11 @@ function PerfTile({
   accent: string;
   bg: string;
   flag?: "BARU" | "URGENT";
+  onPress?: () => void;
 }) {
   return (
-    <Card pad={14} radius={18} style={{ width: "48%" }}>
+    <Pressable onPress={onPress} style={({ pressed }) => ({ width: "48%", opacity: pressed ? 0.8 : 1 })}>
+    <Card pad={14} radius={18} style={{ width: "100%" }}>
       {flag ? (
         <View
           style={{
@@ -620,6 +717,7 @@ function PerfTile({
         {hint}
       </Txt>
     </Card>
+    </Pressable>
   );
 }
 
