@@ -18,6 +18,7 @@ import { Button, Icon, type IconName, Txt } from "@/components/ui";
 import { colors, fonts, radii } from "@/theme/tokens";
 import { hasSession, refreshSession, signIn } from "@/lib/auth";
 import { hasPin } from "@/lib/pin";
+import { markUnlocked } from "@/lib/app-lock";
 import {
   authenticate,
   getBiometricType,
@@ -41,6 +42,7 @@ export default function LoginScreen() {
   }, []);
 
   async function routeAfterAuth() {
+    markUnlocked(); // baru saja autentikasi → jangan tampilkan overlay kunci
     // PIN belum dibuat → arahkan ke pembuatan PIN; jika sudah → langsung Home.
     if (await hasPin()) router.replace("/home");
     else router.replace("/create-pin");

@@ -9,20 +9,15 @@ import ComunaWordmark from "@/assets/logo/comuna-wordmark-white.svg";
 import { Txt } from "@/components/ui";
 import { colors } from "@/theme/tokens";
 import { hasSession } from "@/lib/auth";
-import { hasPin } from "@/lib/pin";
-
 export default function SplashScreen() {
   useEffect(() => {
-    // Routing entri: cek sesi & PIN tersimpan.
-    //   - sesi + PIN → Buka Kunci (PIN / biometrik)
-    //   - sesi tanpa PIN → langsung Home
-    //   - tanpa sesi → Login
+    // Routing entri: ada sesi → Home (gerbang kunci global/LockGate yang menampilkan
+    // layar PIN/biometrik bila PIN diset); tanpa sesi → Login.
     let cancelled = false;
     const t = setTimeout(async () => {
-      const [session, pin] = await Promise.all([hasSession(), hasPin()]);
+      const session = await hasSession();
       if (cancelled) return;
-      if (session && pin) router.replace("/unlock");
-      else if (session) router.replace("/home");
+      if (session) router.replace("/home");
       else router.replace("/login");
     }, 1800);
     return () => {

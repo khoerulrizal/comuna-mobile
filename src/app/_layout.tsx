@@ -12,6 +12,7 @@ import {
   PlusJakartaSans_800ExtraBold,
 } from "@expo-google-fonts/plus-jakarta-sans";
 import { JetBrainsMono_500Medium } from "@expo-google-fonts/jetbrains-mono";
+import { LockGate } from "@/components/LockGate";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -43,6 +44,9 @@ export default function RootLayout() {
         <Stack.Screen name="unlock" />
         <Stack.Screen name="(tabs)" />
       </Stack>
+      {/* Gerbang kunci global (overlay) — tutup semua route saat terkunci, termasuk
+          deep link / cold start, dan kunci ulang saat kembali dari background. */}
+      <LockGate />
     </SafeAreaProvider>
   );
 }

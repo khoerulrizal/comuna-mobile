@@ -10,6 +10,7 @@ import { Keypad, PinDots } from "@/components/PinPad";
 import { Button, Icon, Txt } from "@/components/ui";
 import { colors } from "@/theme/tokens";
 import { PIN_LENGTH, setPin } from "@/lib/pin";
+import { markUnlocked } from "@/lib/app-lock";
 import {
   authenticate,
   biometricLabel,
@@ -17,6 +18,12 @@ import {
   setBiometricEnabled,
   type BiometricType,
 } from "@/lib/biometric";
+
+/** PIN baru dibuat / dilewati → tandai sudah terbuka lalu masuk Home. */
+function goHome() {
+  markUnlocked();
+  router.replace("/home");
+}
 
 type Stage = "enter" | "confirm" | "bio";
 
@@ -71,7 +78,7 @@ export default function CreatePinScreen() {
     if (bioType) {
       setStage("bio");
     } else {
-      router.replace("/home");
+      goHome();
     }
   }
 
@@ -90,7 +97,7 @@ export default function CreatePinScreen() {
   async function enableBio() {
     const ok = await authenticate(`Aktifkan ${biometricLabel(bioType)}`);
     if (ok) await setBiometricEnabled(true);
-    router.replace("/home");
+    goHome();
   }
 
   if (stage === "bio") {
@@ -98,7 +105,7 @@ export default function CreatePinScreen() {
       <BioOffer
         bioType={bioType}
         onEnable={enableBio}
-        onSkip={() => router.replace("/home")}
+        onSkip={goHome}
         insets={insets}
       />
     );
