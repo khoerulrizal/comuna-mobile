@@ -21,6 +21,8 @@ import { announcementShortDate, categoryTint, getAnnouncements, type Announcemen
 import { getPerformaSummary, type PerformaSummary } from "@/lib/performa";
 import { getCapabilities } from "@/lib/capabilities";
 import { getManagerContext, type ManagerContext } from "@/lib/manager";
+import { getUnreadCount } from "@/lib/notifications";
+import { registerForPush } from "@/lib/push";
 import { CachedImage } from "@/components/CachedImage";
 
 type QuickHref =
@@ -81,16 +83,21 @@ export default function HomeScreen() {
   const [mgr, setMgr] = useState<ManagerContext | null>(null);
   const [offModal, setOffModal] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [unread, setUnread] = useState(0);
+
+  // Registrasi push (izin + token Expo → server) sekali saat Home dibuka.
+  useEffect(() => { registerForPush(); }, []);
 
   const load = useCallback(async () => {
     try {
-      const [h, s, ann, pf, cap, mc] = await Promise.all([
+      const [h, s, ann, pf, cap, mc, un] = await Promise.all([
         getHome(),
         getAttendanceStats().catch(() => null),
         getAnnouncements(8).catch(() => null),
         getPerformaSummary().catch(() => null),
         getCapabilities().catch(() => null),
         getManagerContext().catch(() => null),
+        getUnreadCount().catch(() => 0),
       ]);
       setHome(h);
       if (s) setStats(s);
@@ -98,6 +105,7 @@ export default function HomeScreen() {
       if (pf) setPerf(pf);
       if (cap) setCaps(new Set(cap.modules));
       setMgr(mc);
+      setUnread(un);
     } catch (e) {
       if (e instanceof AuthError) router.replace("/login");
       // selain itu: biarkan tampilan fallback — Home tetap berguna.
@@ -213,7 +221,10 @@ export default function HomeScreen() {
                 </Txt>
               </View>
             </View>
-            <View
+            <Pressable
+              onPress={() => router.push("/notifikasi")}
+              accessibilityRole="button"
+              accessibilityLabel={unread > 0 ? `Notifikasi, ${unread} belum dibaca` : "Notifikasi"}
               style={{
                 width: 38,
                 height: 38,
@@ -224,20 +235,27 @@ export default function HomeScreen() {
               }}
             >
               <Icon name="bell" size={20} color="#fff" strokeWidth={2} />
-              <View
-                style={{
-                  position: "absolute",
-                  top: 8,
-                  right: 9,
-                  width: 8,
-                  height: 8,
-                  borderRadius: 4,
-                  backgroundColor: colors.coral[500],
-                  borderWidth: 2,
-                  borderColor: colors.brand[500],
-                }}
-              />
-            </View>
+              {unread > 0 ? (
+                <View
+                  style={{
+                    position: "absolute",
+                    top: 6,
+                    right: 6,
+                    minWidth: 16,
+                    height: 16,
+                    borderRadius: 8,
+                    paddingHorizontal: 3,
+                    backgroundColor: colors.coral[500],
+                    borderWidth: 1.5,
+                    borderColor: colors.brand[500],
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <Txt size={9} weight="extrabold" color="#fff">{unread > 9 ? "9+" : unread}</Txt>
+                </View>
+              ) : null}
+            </Pressable>
           </View>
 
           {/* Shift info */}

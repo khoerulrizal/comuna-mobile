@@ -78,6 +78,12 @@
           "cameraPermission": "Comuna memerlukan kamera untuk memfoto lampiran pengajuan cuti."
         }
       ],
+      [
+        "expo-notifications",
+        {
+          "color": "#6B5BFF"
+        }
+      ],
       "expo-sharing"
     ],
     "experiments": {

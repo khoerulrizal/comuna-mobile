@@ -64,6 +64,14 @@ export async function refreshSession(): Promise<boolean> {
 
 /** Keluar: cabut refresh token di server lalu bersihkan sesi lokal. */
 export async function signOut(): Promise<void> {
+  // Lepas token push perangkat ini SEBELUM sesi dibersihkan (butuh access token).
+  // Dynamic import agar expo-notifications tak dimuat lebih awal dari perlu.
+  try {
+    const { unregisterForPush } = await import("./push");
+    await unregisterForPush();
+  } catch {
+    // abaikan
+  }
   const refreshToken = await getRefreshToken();
   if (refreshToken) {
     try {

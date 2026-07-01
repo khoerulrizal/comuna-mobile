@@ -13,6 +13,7 @@ import {
 } from "@expo-google-fonts/plus-jakarta-sans";
 import { JetBrainsMono_500Medium } from "@expo-google-fonts/jetbrains-mono";
 import { LockGate } from "@/components/LockGate";
+import { attachNotificationTapHandler } from "@/lib/push";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -29,6 +30,9 @@ export default function RootLayout() {
   useEffect(() => {
     if (loaded) SplashScreen.hideAsync();
   }, [loaded]);
+
+  // Tap notifikasi push → buka layar bell.
+  useEffect(() => attachNotificationTapHandler(), []);
 
   if (!loaded) return null;
 
