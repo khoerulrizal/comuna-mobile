@@ -41,6 +41,8 @@ interface ApiOptions {
   body?: unknown;
   /** Sertakan Bearer access token & coba refresh otomatis saat 401. */
   auth?: boolean;
+  /** Batalkan request saat komponen unmount / berpindah layar (AbortController). */
+  signal?: AbortSignal;
   /** internal: cegah loop refresh. */
   _retried?: boolean;
 }
@@ -104,8 +106,12 @@ export async function api<T = Record<string, unknown>>(
       method: opts.method ?? "GET",
       headers,
       body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
+      signal: opts.signal,
     });
-  } catch {
+  } catch (e) {
+    // Dibatalkan (unmount/pindah layar) → biarkan AbortError menyebar agar pemanggil
+    // bisa mengabaikannya (bukan error jaringan yang perlu ditampilkan).
+    if (opts.signal?.aborted) throw e;
     throw new NetworkError();
   }
 

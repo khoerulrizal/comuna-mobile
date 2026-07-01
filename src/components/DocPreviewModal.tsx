@@ -2,11 +2,12 @@
 // (PDF/Office) via WebView. Berkas tersimpan di CDN publik, jadi bisa dipratinjau.
 import { useEffect, useState } from "react";
 import {
-  ActivityIndicator, Dimensions, Image, Linking, Modal, Platform, Pressable, ScrollView, View,
+  ActivityIndicator, Dimensions, Linking, Modal, Platform, Pressable, ScrollView, View,
 } from "react-native";
 import { WebView } from "react-native-webview";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Icon, Txt } from "@/components/ui";
+import { CachedImage } from "@/components/CachedImage";
 import { colors } from "@/theme/tokens";
 
 export interface PreviewDoc {
@@ -71,10 +72,10 @@ export function DocPreviewModal({ doc, onClose }: { doc: PreviewDoc | null; onCl
               showsVerticalScrollIndicator={false}
               showsHorizontalScrollIndicator={false}
             >
-              <Image
-                source={{ uri: doc.url }}
+              <CachedImage
+                uri={doc.url}
                 style={{ width: SCR_W, height: SCR_H * 0.8 }}
-                resizeMode="contain"
+                contentFit="contain"
                 onLoadEnd={() => setLoading(false)}
                 onError={() => { setLoading(false); setFailed(true); }}
               />

@@ -12,17 +12,17 @@ import { hasSession } from "@/lib/auth";
 export default function SplashScreen() {
   useEffect(() => {
     // Routing entri: ada sesi → Home (gerbang kunci global/LockGate yang menampilkan
-    // layar PIN/biometrik bila PIN diset); tanpa sesi → Login.
+    // layar PIN/biometrik bila PIN diset); tanpa sesi → Login. Dijalankan SEGERA
+    // (tanpa delay buatan) — splash tampil selama pengecekan sesi + navigasi.
     let cancelled = false;
-    const t = setTimeout(async () => {
+    (async () => {
       const session = await hasSession();
       if (cancelled) return;
       if (session) router.replace("/home");
       else router.replace("/login");
-    }, 1800);
+    })();
     return () => {
       cancelled = true;
-      clearTimeout(t);
     };
   }, []);
 

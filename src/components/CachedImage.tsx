@@ -9,10 +9,14 @@ export function CachedImage({
   uri,
   style,
   contentFit = "cover",
+  onLoadEnd,
+  onError,
 }: {
   uri: string;
   style?: StyleProp<ImageStyle>;
   contentFit?: ContentFit;
+  onLoadEnd?: () => void;
+  onError?: () => void;
 }) {
   return (
     <Image
@@ -21,6 +25,8 @@ export function CachedImage({
       contentFit={contentFit}
       cachePolicy="memory-disk"
       transition={150}
+      onLoadEnd={onLoadEnd}
+      onError={onError}
     />
   );
 }

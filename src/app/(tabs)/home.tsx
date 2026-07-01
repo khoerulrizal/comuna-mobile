@@ -35,6 +35,43 @@ function jamLabel(min: number): string {
   return m > 0 ? `${h}j ${m}m` : `${h}j`;
 }
 
+// Jam berjalan (tick tiap detik) DIISOLASI dari HomeScreen — hanya komponen kecil
+// ini yang re-render per detik, bukan seluruh layar (779 baris + kartu/pengumuman).
+const LiveClock = React.memo(function LiveClock({
+  tzOff,
+  active,
+  tzAbbr,
+}: {
+  tzOff: number;
+  active: boolean;
+  tzAbbr: string;
+}) {
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNowMs(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+  const time = active ? liveClock(nowMs, tzOff) : "--:--:--";
+  const label = active ? dateLabel(nowMs, tzOff) : "Hari ini";
+  return (
+    <>
+      <Txt size={12} weight="semibold" color={colors.neutral[500]} style={{ letterSpacing: 0.2 }}>
+        {label}
+      </Txt>
+      <View style={{ flexDirection: "row", alignItems: "baseline", gap: 4, marginTop: 2 }}>
+        <Txt size={26} weight="extrabold" color={colors.neutral[900]} style={{ fontVariant: ["tabular-nums"] }}>
+          {time}
+        </Txt>
+        {tzAbbr ? (
+          <Txt size={13} weight="semibold" color={colors.neutral[500]}>
+            {tzAbbr}
+          </Txt>
+        ) : null}
+      </View>
+    </>
+  );
+});
+
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const [home, setHome] = useState<Home | null>(null);
@@ -44,14 +81,7 @@ export default function HomeScreen() {
   const [caps, setCaps] = useState<Set<string> | null>(null);
   const [mgr, setMgr] = useState<ManagerContext | null>(null);
   const [offModal, setOffModal] = useState(false);
-  const [nowMs, setNowMs] = useState(() => Date.now());
   const [refreshing, setRefreshing] = useState(false);
-
-  // Jam berjalan: tick tiap detik untuk clock live di card.
-  useEffect(() => {
-    const t = setInterval(() => setNowMs(Date.now()), 1000);
-    return () => clearInterval(t);
-  }, []);
 
   const load = useCallback(async () => {
     try {
@@ -123,8 +153,6 @@ export default function HomeScreen() {
   const today = home?.today ?? null;
   const tzOff = today?.tzOffsetMinutes ?? 0;
   const tzAbbr = today?.tzAbbr ?? "";
-  const liveTime = today ? liveClock(nowMs, tzOff) : "--:--:--";
-  const todayLabel = today ? dateLabel(nowMs, tzOff) : "Hari ini";
   const clockInHMS = today ? timeHMS(today.clockIn, tzOff) : null;
   const clockOutHMS = today ? timeHMS(today.clockOut, tzOff) : null;
   const attStatus = today?.attendanceStatus ?? "BEFORE_CLOCKIN";
@@ -252,19 +280,7 @@ export default function HomeScreen() {
           <Card pad={18} radius={22} elevated>
             <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
               <View style={{ flex: 1 }}>
-                <Txt size={12} weight="semibold" color={colors.neutral[500]} style={{ letterSpacing: 0.2 }}>
-                  {todayLabel}
-                </Txt>
-                <View style={{ flexDirection: "row", alignItems: "baseline", gap: 4, marginTop: 2 }}>
-                  <Txt size={26} weight="extrabold" color={colors.neutral[900]} style={{ fontVariant: ["tabular-nums"] }}>
-                    {liveTime}
-                  </Txt>
-                  {tzAbbr ? (
-                    <Txt size={13} weight="semibold" color={colors.neutral[500]}>
-                      {tzAbbr}
-                    </Txt>
-                  ) : null}
-                </View>
+                <LiveClock tzOff={tzOff} active={!!today} tzAbbr={tzAbbr} />
                 <View style={{ marginTop: 6, flexDirection: "row", alignItems: "center", gap: 6 }}>
                   {attStatus === "DONE" ? (
                     <>
