@@ -98,12 +98,12 @@ export function Keypad({
         ))}
         {/* Slot kiri-bawah: biometrik atau kosong */}
         {bioIcon && onBio ? (
-          <Key icon={bioIcon} onPress={onBio} />
+          <Key icon={bioIcon} onPress={onBio} a11yLabel="Buka dengan biometrik" />
         ) : (
           <View style={{ width: KEY_SIZE, height: KEY_SIZE }} />
         )}
         <Key label="0" onPress={() => onDigit("0")} />
-        <Key icon="chevronLeft" onPress={onDelete} muted />
+        <Key icon="chevronLeft" onPress={onDelete} muted a11yLabel="Hapus" />
       </View>
     </View>
   );
@@ -116,15 +116,19 @@ function Key({
   icon,
   onPress,
   muted = false,
+  a11yLabel,
 }: {
   label?: string;
   icon?: IconName;
   onPress: () => void;
   muted?: boolean;
+  a11yLabel?: string;
 }) {
   return (
     <Pressable
       onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={a11yLabel ?? label}
       style={({ pressed }) => ({
         width: KEY_SIZE,
         height: KEY_SIZE,

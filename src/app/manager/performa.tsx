@@ -168,7 +168,7 @@ export default function TeamPerformanceScreen() {
           {/* Team OKR */}
           {data.teamOkr.length > 0 ? (
             <>
-              <Txt size={15} weight="extrabold" color={colors.neutral[800]} style={{ marginTop: 18, marginBottom: 10 }}>Tujuan Tim · OKR</Txt>
+              <Txt size={15} weight="extrabold" color={colors.neutral[800]} style={{ marginTop: 18, marginBottom: 10 }}>Objective Tim · OKR</Txt>
               <View style={{ gap: 10 }}>
                 {data.teamOkr.map((o, i) => (
                   <Card key={i} pad={14} radius={16}>

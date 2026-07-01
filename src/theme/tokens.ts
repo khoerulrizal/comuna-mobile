@@ -31,7 +31,7 @@ export const colors = {
     100: "#EDEAF5",
     200: "#DAD4E8",
     300: "#B8B0CC",
-    400: "#8F86A8",
+    400: "#7A718F", // digelapkan agar teks caption lolos WCAG AA (≈4.6:1 di putih; sebelumnya #8F86A8 = 3.42:1)
     500: "#6B6483",
     600: "#4E475F",
     700: "#2F2A3E",

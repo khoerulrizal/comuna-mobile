@@ -20,7 +20,7 @@ export default function PinjamanSuksesScreen() {
       <StatusBar style="dark" />
       <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 10, backgroundColor: "#fff", borderBottomWidth: 1, borderBottomColor: colors.neutral[100] }}>
         <View style={{ width: 50 }} />
-        <Txt size={14} weight="extrabold" color={colors.neutral[900]}>Ajukan Pinjaman</Txt>
+        <Txt size={14} weight="extrabold" color={colors.neutral[900]}>Pengajuan Terkirim</Txt>
         <Pressable onPress={() => router.replace("/pinjaman")} hitSlop={8}><Txt size={13} weight="bold" color={colors.brand[600]}>Selesai</Txt></Pressable>
       </View>
 

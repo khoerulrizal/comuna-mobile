@@ -37,6 +37,9 @@ function TabBar({ state, navigation }: TabBarProps) {
         return (
           <Pressable
             key={route.key}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: isActive }}
+            accessibilityLabel={meta.label}
             onPress={() => {
               const event = navigation.emit({
                 type: "tabPress",
