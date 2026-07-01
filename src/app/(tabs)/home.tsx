@@ -6,7 +6,6 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { Avatar, Card, Icon, type IconName, Pill, SectionHeader, Txt } from "@/components/ui";
 import { colors, radii, shadows } from "@/theme/tokens";
-import { me } from "@/data/mock";
 import { AuthError } from "@/lib/api";
 import {
   clockLocationSummary,
@@ -127,7 +126,7 @@ export default function HomeScreen() {
   const shift = home?.shift ?? null;
   const greeting = profile?.greeting ?? "Halo";
   const photoUrl = profile?.photoUrl ?? null;
-  const fullName = profile?.fullName ?? me.name;
+  const fullName = profile?.fullName ?? "Pengguna";
 
   // Sudah dimuat tapi tak ada penugasan shift → belum ada jadwal (kantor disembunyikan).
   const noSchedule = loaded && !shift;
@@ -143,11 +142,11 @@ export default function HomeScreen() {
       }`
     : noSchedule
       ? "Belum ada jadwal kerja"
-      : `Shift · ${me.shift}`;
+      : "Memuat jadwal…";
 
-  // Lokasi clock: tampil hanya jika ada shift (atau fallback mock saat belum dimuat).
+  // Lokasi clock: tampil hanya jika ada shift; saat masih dimuat, kosong (bukan mock).
   const showLocation = !noSchedule;
-  const loc = shift ? clockLocationSummary(shift) : { text: me.location, extra: 0 };
+  const loc = shift ? clockLocationSummary(shift) : { text: "", extra: 0 };
 
   // ── Card clock-in/out (data hari ini, zona shift) ──────────────────────────
   const today = home?.today ?? null;
