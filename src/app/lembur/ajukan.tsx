@@ -54,6 +54,8 @@ export default function AjukanLemburScreen() {
   useFocusEffect(useCallback(() => { let a = true; (async () => { if (a) await load(); })(); return () => { a = false; }; }, [load]));
 
   const policy = useMemo(() => policies.find((p) => p.id === policyId) ?? null, [policies, policyId]);
+  // Batas atas tanggal lembur: 60 hari ke depan (cegah salah pilih tahun; server otoritatif).
+  const maxDate = useMemo(() => { const d = new Date(); d.setDate(d.getDate() + 60); return d; }, []);
   const maxDur = policy?.maxHoursPerDay ?? 4;
   const totalHours = duration;
   const endTime = startTime ? addDurationToTime(startTime, duration) : null;
@@ -234,7 +236,7 @@ export default function AjukanLemburScreen() {
         </Pressable>
       </Modal>
 
-      <DatePicker visible={showDate} value={date} title="Tanggal lembur" onSelect={setDate} onClose={() => setShowDate(false)} />
+      <DatePicker visible={showDate} value={date} max={maxDate} title="Tanggal lembur" onSelect={setDate} onClose={() => setShowDate(false)} />
       <TimePicker visible={showStart} value={startTime} title="Waktu mulai" onSelect={setStartTime} onClose={() => setShowStart(false)} />
     </View>
   );

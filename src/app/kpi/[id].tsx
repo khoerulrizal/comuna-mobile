@@ -148,6 +148,14 @@ function IndicatorCard({ ind, onPress }: { ind: KpiIndicator; onPress: () => voi
   );
 }
 
+/** Bersihkan input jadi desimal valid: digit + satu pemisah (./,) + minus di depan. */
+function sanitizeDecimal(s: string): string {
+  let out = s.replace(/[^0-9.,-]/g, "").replace(/(?!^)-/g, "");
+  const sep = out.search(/[.,]/);
+  if (sep !== -1) out = out.slice(0, sep + 1) + out.slice(sep + 1).replace(/[.,]/g, "");
+  return out;
+}
+
 function ProgressModal({
   assignmentId, indicator, onClose, onSaved,
 }: { assignmentId: string; indicator: KpiIndicator; onClose: () => void; onSaved: () => void }) {
@@ -158,7 +166,8 @@ function ProgressModal({
   const [saving, setSaving] = useState(false);
 
   const num = Number(value.replace(",", "."));
-  const valid = value.trim() !== "" && Number.isFinite(num);
+  const overMax = indicator.maxValue != null && Number.isFinite(num) && num > indicator.maxValue;
+  const valid = value.trim() !== "" && Number.isFinite(num) && !overMax;
 
   async function pickPhoto() {
     let ImagePicker: typeof import("expo-image-picker");
@@ -207,12 +216,17 @@ function ProgressModal({
           </Txt>
           <TextInput
             value={value}
-            onChangeText={setValue}
+            onChangeText={(t) => setValue(sanitizeDecimal(t))}
             keyboardType="numeric"
             placeholder="contoh: 95"
             placeholderTextColor={colors.neutral[400]}
             style={inputStyle}
           />
+          {overMax ? (
+            <Txt size={11.5} weight="semibold" color={colors.rose[700]} style={{ marginTop: 6 }}>
+              Maksimal {formatKpiValue(indicator.maxValue, indicator.unit)}.
+            </Txt>
+          ) : null}
 
           <Txt size={11.5} weight="bold" color={colors.neutral[600]} style={{ marginTop: 14, marginBottom: 6 }}>CATATAN (OPSIONAL)</Txt>
           <TextInput

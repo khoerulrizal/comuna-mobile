@@ -130,6 +130,14 @@ function KrCard({ kr, index, onPress }: { kr: KeyResultDetail; index: number; on
   );
 }
 
+/** Bersihkan input jadi desimal valid: digit + satu pemisah (./,) + minus di depan. */
+function sanitizeDecimal(s: string): string {
+  let out = s.replace(/[^0-9.,-]/g, "").replace(/(?!^)-/g, "");
+  const sep = out.search(/[.,]/);
+  if (sep !== -1) out = out.slice(0, sep + 1) + out.slice(sep + 1).replace(/[.,]/g, "");
+  return out;
+}
+
 function KrProgressModal({
   objectiveId, kr, onClose, onSaved,
 }: { objectiveId: string; kr: KeyResultDetail; onClose: () => void; onSaved: () => void }) {
@@ -168,7 +176,7 @@ function KrProgressModal({
           <Txt size={11.5} weight="bold" color={colors.neutral[600]} style={{ marginTop: 18, marginBottom: 6 }}>
             NILAI SAAT INI{kr.unit !== "NUMBER" ? ` (${kr.unit})` : ""}
           </Txt>
-          <TextInput value={value} onChangeText={setValue} keyboardType="numeric" placeholder="contoh: 80" placeholderTextColor={colors.neutral[400]} style={inputStyle} />
+          <TextInput value={value} onChangeText={(t) => setValue(sanitizeDecimal(t))} keyboardType="numeric" placeholder="contoh: 80" placeholderTextColor={colors.neutral[400]} style={inputStyle} />
 
           <Txt size={11.5} weight="bold" color={colors.neutral[600]} style={{ marginTop: 14, marginBottom: 6 }}>CATATAN (OPSIONAL)</Txt>
           <TextInput value={note} onChangeText={setNote} placeholder="Keterangan singkat" placeholderTextColor={colors.neutral[400]} multiline style={[inputStyle, { height: 72, textAlignVertical: "top" }]} />

@@ -55,6 +55,8 @@ export default function AjukanCutiScreen() {
 
   const policy = useMemo(() => policies.find((p) => p.id === policyId) ?? null, [policies, policyId]);
   const minStart = useMemo(() => addDays(new Date(), policy?.minRequestDaysAhead ?? 0), [policy]);
+  // Batas atas: 1 tahun ke depan (cegah salah pilih tahun; cuti tetap boleh future).
+  const maxDate = useMemo(() => addDays(new Date(), 365), []);
   // Setengah hari hanya berlaku bila rentang 1 hari (mulai = selesai).
   const singleDay = !!start && !!end && toYMD(start) === toYMD(end);
   useEffect(() => { if (isHalfDay && !singleDay) setIsHalfDay(false); }, [isHalfDay, singleDay]);
@@ -283,8 +285,8 @@ export default function AjukanCutiScreen() {
         </Pressable>
       </Modal>
 
-      <DatePicker visible={showStart} value={start} min={minStart} title="Tanggal mulai" onSelect={(d) => { setStart(d); if (end && d > end) setEnd(null); }} onClose={() => setShowStart(false)} />
-      <DatePicker visible={showEnd} value={end} min={start ?? minStart} title="Tanggal selesai" onSelect={setEnd} onClose={() => setShowEnd(false)} />
+      <DatePicker visible={showStart} value={start} min={minStart} max={maxDate} title="Tanggal mulai" onSelect={(d) => { setStart(d); if (end && d > end) setEnd(null); }} onClose={() => setShowStart(false)} />
+      <DatePicker visible={showEnd} value={end} min={start ?? minStart} max={maxDate} title="Tanggal selesai" onSelect={setEnd} onClose={() => setShowEnd(false)} />
     </View>
   );
 }

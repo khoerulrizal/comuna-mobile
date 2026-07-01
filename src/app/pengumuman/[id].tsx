@@ -1,6 +1,6 @@
 // Detail Pengumuman — banner + konten kaya (HTML) + lampiran (preview) + konfirmasi.
 import { useCallback, useState } from "react";
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, View } from "react-native";
+import { ActivityIndicator, Alert, Pressable, RefreshControl, ScrollView, View } from "react-native";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -41,7 +41,9 @@ export default function PengumumanDetailScreen() {
       setData({ ...data, confirmed: true, confirmedAt: res.confirmedAt });
     } catch (e) {
       if (e instanceof AuthError) { router.replace("/login"); return; }
-      setError(e instanceof ApiError ? e.message : "Gagal menyimpan konfirmasi");
+      // JANGAN pakai state error level-halaman (akan mengganti konten yang sedang
+      // dibaca dgn kartu error). Gagal konfirmasi → Alert saja, konten tetap tampil.
+      Alert.alert("Gagal", e instanceof ApiError ? e.message : "Gagal menyimpan konfirmasi. Coba lagi.");
     } finally {
       setConfirming(false);
     }

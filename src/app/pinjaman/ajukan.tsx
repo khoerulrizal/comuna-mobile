@@ -51,6 +51,8 @@ export default function PinjamanAjukanScreen() {
   const effTenor = tenor ?? (tenorOptions.includes(12) ? 12 : tenorOptions[0] ?? 1);
   const overAmount = maxAmount > 0 && amount > maxAmount;
   const monthly = effTenor > 0 ? Math.floor(amount / effTenor) : 0;
+  // Angsuran terakhir menyerap sisa pembulatan → total ((n-1)×monthly + lastMonthly) = pokok.
+  const lastMonthly = effTenor > 0 ? amount - monthly * (effTenor - 1) : 0;
   const valid = amount > 0 && !overAmount && effTenor >= 1 && effTenor <= maxInstallments;
 
   const quickAmounts = useMemo(() => {
@@ -181,6 +183,11 @@ export default function PinjamanAjukanScreen() {
                 <Txt size={11} color={colors.neutral[600]}>{rupiah(amount)} ÷ {effTenor} bulan</Txt>
                 <Txt size={11} weight="bold" color={colors.neutral[600]}>Auto-debit dari gaji</Txt>
               </View>
+              {lastMonthly !== monthly ? (
+                <Txt size={10.5} color={colors.neutral[500]} style={{ marginTop: 4 }}>
+                  Angsuran terakhir {rupiah(lastMonthly)} (menyerap pembulatan)
+                </Txt>
+              ) : null}
             </View>
 
             {/* Persyaratan */}
