@@ -1,0 +1,39 @@
+name: Deploy (EAS build + submit)
+
+# On merge to main: build production iOS + Android on EAS and auto-submit
+# to TestFlight (iOS) and the Play internal track (Android).
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {} # allow manual runs from the Actions tab
+
+# Only the latest commit on main deploys; supersede in-flight runs.
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: EAS build & submit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Setup EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build and submit
+        run: eas build --platform all --profile production --auto-submit --non-interactive

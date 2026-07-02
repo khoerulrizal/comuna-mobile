@@ -84,11 +84,28 @@
           "color": "#6B5BFF"
         }
       ],
-      "expo-sharing"
+      "expo-sharing",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "enableProguardInReleaseBuilds": true,
+            "enableShrinkResourcesInReleaseBuilds": true,
+            "extraProguardRules": "# --- TensorFlow Lite (react-native-fast-tflite) ---\n# TFLite classes are reached via JNI/reflection; R8 would strip them.\n-keep class org.tensorflow.** { *; }\n-keep class org.tensorflow.lite.** { *; }\n-keep class org.tensorflow.lite.gpu.** { *; }\n-dontwarn org.tensorflow.**\n\n# --- JNI native bindings (any lib using System.loadLibrary) ---\n-keepclasseswithmembernames class * {\n    native <methods>;\n}"
+          }
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "4bb5defe-fa6f-4b5f-baec-cf97eaa457a7"
+      }
+    },
+    "owner": "cazh-dev"
   }
 }

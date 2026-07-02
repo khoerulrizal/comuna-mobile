@@ -8,6 +8,7 @@
     "@expo/ui": "~56.0.18",
     "@react-navigation/bottom-tabs": "^7.18.2",
     "expo": "~56.0.12",
+    "expo-build-properties": "~56.0.20",
     "expo-camera": "~56.0.8",
     "expo-constants": "~56.0.18",
     "expo-crypto": "~56.0.4",
